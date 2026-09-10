@@ -29,11 +29,12 @@ from asim_forge.benchmarking import (
 from asim_forge.commands import evaluation as evaluation_command
 
 
-def test_semantic_benchmark_split_requires_frozen_group_evidence() -> None:
+@pytest.mark.parametrize("track", ["semantic-gold", "semantic-development"])
+def test_semantic_benchmark_split_requires_frozen_group_evidence(track: str) -> None:
     payload = {
         "corpus_id": "semantic-split",
         "title": "Semantic split",
-        "track": "semantic-gold",
+        "track": track,
         "objective": "ASIM correctness",
         "system": "test",
         "interpretation": "Held-out evaluation.",
@@ -91,7 +92,8 @@ def test_checked_corpus_registry_has_separate_objective_tracks() -> None:
     assert tracks.count("parsing-gold") == 3
     assert tracks.count("format-diagnostic") == 3
     assert tracks.count("schema-hint") == 3
-    assert tracks.count("semantic-gold") == 2
+    assert tracks.count("semantic-gold") == 1
+    assert tracks.count("semantic-development") == 1
     assert all(len(fingerprint) == 64 for _, _, fingerprint in loaded)
 
 
@@ -291,8 +293,9 @@ def test_local_schema_hint_corpus_reports_weak_agreement_separately(tmp_path: Pa
     assert "weak upstream supervision" in markdown
 
 
+@pytest.mark.parametrize("track", ["semantic-gold", "semantic-development"])
 def test_semantic_corpus_uses_the_shared_comparison_contract(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, track: str
 ) -> None:
     corpus = tmp_path / "registry" / "semantic"
     corpus.mkdir(parents=True)
@@ -301,7 +304,7 @@ def test_semantic_corpus_uses_the_shared_comparison_contract(
         "format_version": "1",
         "corpus_id": "semantic",
         "title": "Semantic corpus",
-        "track": "semantic-gold",
+        "track": track,
         "objective": "ASIM correctness",
         "system": "test",
         "interpretation": "Adjudicated labels.",
@@ -351,8 +354,16 @@ def test_semantic_corpus_uses_the_shared_comparison_contract(
     )
 
     assert report.catalogue_revision == "a" * 40
+    assert report.results[0].track == track
     assert report.results[0].metrics["field_micro_f1"] == 0.75
     assert report.warnings == ["semantic/test-approach: small fixture"]
+    markdown = (tmp_path / "output" / "benchmark-report.md").read_text(encoding="utf-8")
+    gold_section, development_section = markdown.split("### Checked development labels", 1)
+    gold_section = gold_section.split("### Semantic gold and contract fixtures", 1)[1]
+    expected_section = gold_section if track == "semantic-gold" else development_section
+    other_section = development_section if track == "semantic-gold" else gold_section
+    assert "Semantic corpus" in expected_section
+    assert "Semantic corpus" not in other_section
 
 
 def test_semantic_benchmark_verifies_frozen_groups_before_split_comparison(

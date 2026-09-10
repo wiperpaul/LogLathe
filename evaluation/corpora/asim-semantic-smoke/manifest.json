@@ -7,8 +7,8 @@
   "system": "asim-forge-synthetic",
   "interpretation": "Only reviewed cases in this track are ASIM gold; the current synthetic case tests the harness rather than approach quality.",
   "source": {
-    "project": "ASIM Forge",
-    "url": "https://github.com/wiperpaul/ASIM-Forge/tree/main/examples/evaluation",
+    "project": "LogLathe",
+    "url": "https://github.com/wiperpaul/LogLathe/tree/main/examples/evaluation",
     "terms": "GPL-3.0-or-later repository fixture.",
     "redistribution": "content"
   },

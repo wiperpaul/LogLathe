@@ -45,8 +45,8 @@ dev = [
 asim-forge = "asim_forge.cli:main"
 
 [project.urls]
-Repository = "https://github.com/wiperpaul/ASIM-Forge"
-Issues = "https://github.com/wiperpaul/ASIM-Forge/issues"
+Repository = "https://github.com/wiperpaul/LogLathe"
+Issues = "https://github.com/wiperpaul/LogLathe/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

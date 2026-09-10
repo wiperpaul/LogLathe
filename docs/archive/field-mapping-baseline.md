@@ -1,19 +1,26 @@
 # ASIM field-mapping baseline plan
 
-Status: implementation plan
-Last reviewed: 2026-09-02
+Status: archived implementation and experiment record; not authoritative for current behavior
+Plan reviewed: 2026-09-02
+Archived: 2026-09-10
+
+This record preserves the baseline sequence, decisions, and measurements made while
+the work was implemented. Some "current" defects and future-tense steps below have
+since been resolved. See the [evaluation guide](../evaluation.md),
+[architecture](../architecture.md), and [roadmap](../../ROADMAP.md) for current
+behavior and remaining work.
 
 ## Purpose
 
-[The non-LLM corpus plan](non-llm-baseline-corpus.md) decides *which evidence* may
+[The non-LLM corpus plan](../research/baseline-strategy.md) decides *which evidence* may
 support which claim. This note decides *what to build, in what order*, so the field
 mapping stage acquires an interpretable baseline. It is a sequencing and
 implementation document, not a new evidence contract.
 
 ## Problem statement
 
-[artifacts/evaluation-baseline.json](../artifacts/evaluation-baseline.json) currently
-reports `direct-lexical` at `field_micro_f1 = 0.857` on one synthetic case. That
+The ignored local snapshot `artifacts/evaluation-baseline.json` reported
+`direct-lexical` at `field_micro_f1 = 0.857` on one synthetic case. That
 number has no floor, no ceiling, and no error decomposition, so it cannot support
 any statement about approach quality — including the statement that the approach
 works at all.
@@ -31,21 +38,21 @@ reported with the same metric engine, each carrying a different permitted claim.
 The gap B-frozen to B-oracle is engineering headroom. The gap B-oracle to B-ceiling
 is information headroom. Anything above B-ceiling requires the human or
 repository-agent inputs described in
-[the corpus plan](non-llm-baseline-corpus.md#later-human-and-repository-agent-assistance).
+[the corpus plan](../research/baseline-strategy.md#later-human-and-repository-agent-assistance).
 
-## Known defects in the current field mapping stage
+## Baseline defects recorded at the start
 
 These are recorded so the frozen baseline is understood rather than mistaken for a
 tuned system. None should be fixed before B-frozen is captured.
 
 | Defect | Location | Consequence |
 | --- | --- | --- |
-| Candidate generation and ranking are one function | [field_ranking.py](../src/asim_forge/semantic_mapping/field_ranking.py) | Fields with zero token overlap are discarded before scoring, creating an unmeasured recall ceiling |
+| Candidate generation and ranking are one function | [field_ranking.py](../../src/asim_forge/semantic_mapping/field_ranking.py) | Fields with zero token overlap are discarded before scoring, creating an unmeasured recall ceiling |
 | `Alias` fields are excluded from ranking | `rank_fields` | Legitimate ASIM alias targets can never be predicted; the cost is unmeasured |
 | Only `name` and `logical_type` are used | `rank_fields` | Catalogue descriptions, requirement level, and `allowed_values` enumerations are unused |
 | `0.35`/`0.65` precision and coverage weights | `rank_fields` | Arbitrary constants with no train partition on which they could be tuned legitimately |
 | Alphabetical tie-breaking | `rank_fields` sort key | Systematic bias toward `ActorUsername` over `TargetUsername` and similar pairs |
-| Schema concept overlap is an unnormalized count | [source_concept.py](../src/asim_forge/schema_ranking/approaches/source_concept.py) | Schemas with larger concept sets are structurally favoured; invisible at three schemas |
+| Schema concept overlap is an unnormalized count | [source_concept.py](../../src/asim_forge/schema_ranking/approaches/source_concept.py) | Schemas with larger concept sets are structurally favoured; invisible at three schemas |
 | Slots are mapped independently | all approaches | Two slots may claim one target that the compiler will reject; no assignment step exists |
 
 The catalogue `allowed_values` enumerations (`EventResult`, `DvcAction`, and
@@ -78,14 +85,14 @@ currently is. It lands with the v2 contracts in PR 3.
 
 ### PR 2 — statistical honesty
 
-1. Source-family cluster bootstrap confidence intervals on every reported metric.
+1. Source-family cluster bootstrap confidence intervals on selected headline metrics.
 2. Paired permutation tests for approach differences.
 3. Report the minimum detectable effect in the report header. At the planned 30–50
    calibration cases this is roughly 15 F1 points, which bounds what that set can
    decide and should be stated rather than discovered later.
 4. Replace bare `coverage` with a selective risk–coverage curve and its AUC.
 
-Implemented in [statistics.py](../src/asim_forge/semantic_mapping/statistics.py).
+Implemented in [statistics.py](../../src/asim_forge/semantic_mapping/statistics.py).
 Two decisions are worth recording because they constrain later work.
 
 **The exchangeable unit is the source family, not the case.** Templates from one
@@ -103,7 +110,7 @@ The risk–coverage curve orders cases by the approach's own scores. Those score
 normalized lexical overlap, so the curve measures ranking quality only and must not
 be read as calibration. Brier score and reliability diagrams stay out of scope until
 a provider emits probabilities, as
-[the corpus plan](non-llm-baseline-corpus.md#metrics-and-reports) requires.
+[the corpus plan](../research/baseline-strategy.md#metrics-and-reports) requires.
 
 ### PR 3 — version 2 contracts
 
@@ -115,8 +122,8 @@ a provider emits probabilities, as
    not to read it.
 3. Add the source-frame oracle once projection is a separable stage.
 
-Implemented in [source_frame.py](../src/asim_forge/source_semantics/source_frame.py)
-and [context_views.py](../src/asim_forge/semantic_mapping/context_views.py).
+Implemented in [source_frame.py](../../src/asim_forge/source_semantics/source_frame.py)
+and [context_views.py](../../src/asim_forge/semantic_mapping/context_views.py).
 
 **Registry revision `source-frame.v1`.** A role decomposes into four facets, and
 `custom` is reserved for roles the vocabulary cannot anchor at all rather than roles
@@ -147,7 +154,7 @@ end-to-end while defects are still cheap to fix. Then add the deterministic slot
 profiler (N2) and the classical matcher ensemble (N3).
 
 The controlled track is implemented in
-[controlled/](../src/asim_forge/controlled/); N2 and N3 follow separately so the
+[controlled/](../../src/asim_forge/controlled/); N2 and N3 follow separately so the
 new methods are measured on a track that was frozen before they existed.
 
 **Six perturbations in two families.** A label-preserving variant must not change
@@ -158,7 +165,7 @@ as robustness slices and never averaged into real-case results.
 **Priors and retrieval are excluded, not merely unreported.** Priors read no source
 evidence, so surface robustness is undefined for them. Retrieval would match a
 perturbed variant to its own unperturbed seed, which is exactly the leakage
-[the split contract](semantic-dataset-splits.md) forbids. Requesting either raises
+[the split contract](../dataset-curation.md#4-author-and-lock-grouped-splits) forbids. Requesting either raises
 rather than producing a number that looks like evidence.
 
 **Measured on the current fixture.** Abbreviation, compound identifiers, case
@@ -174,7 +181,7 @@ Taken with the V1 result above, the frozen baseline reads the local token window
 and the slot label, and `direct-lexical` over-predicts on an unmapped slot of a
 familiar type. Those are the specific weaknesses N2 and N3 have to beat.
 
-**N2 and N3.** [profiling.py](../src/asim_forge/semantic_mapping/profiling.py)
+**N2 and N3.** [profiling.py](../../src/asim_forge/semantic_mapping/profiling.py)
 derives a deterministic value profile per slot; the `matcher-ensemble` approach
 combines lexical overlap, character n-grams, catalogue type compatibility, value
 enumeration, and value-shape affinity, each retained separately so the ensemble can
@@ -187,7 +194,7 @@ Catalogue types are too coarse to separate `SrcIpAddr` from a bare `Src` when bo
 are strings, so with a meaningless slot label the lexical approaches fall back to
 the generic field. Value shape resolves it.
 
-| `opaque-labels` | field micro F1 | Stability |
+| Approach | Field micro-F1 | Stability |
 | --- | --- | --- |
 | `direct-lexical` | 0.857 to 0.286 | 0.000 |
 | `semantic-frame` | 1.000 to 0.667 | 0.000 |
@@ -203,7 +210,7 @@ agent and the V6 owner question.
 
 ### PR 5 — bounded ASIM parser silver
 
-The B1 release described in [the corpus plan](non-llm-baseline-corpus.md#baseline-release-b1-automated-asim-silver),
+The B1 release described in [the corpus plan](../research/baseline-strategy.md#baseline-release-b1-automated-asim-silver),
 bounded to Authentication, NetworkSession, and AuditEvent, CEF parser families
 first, split by parser family before anything is tuned.
 
@@ -248,7 +255,7 @@ reading a difference. Required attributions are emitted at the end of the report
 ## Corpus selection
 
 
-The corpus decision in [the corpus plan](non-llm-baseline-corpus.md) stands. This
+The corpus decision in [the corpus plan](../research/baseline-strategy.md) stands. This
 note records only the sequencing change and the documented-silver sources that plan
 did not itemise.
 
@@ -259,14 +266,14 @@ lineage extraction, for the reasons in PR 4.
 
 | Source | Contribution | Note |
 | --- | --- | --- |
-| ArcSight CEF and IBM LEEF field dictionaries | The canonical abbreviation table (`src`, `dst`, `spt`, `dpt`, `suser`, `duser`, `deviceAction`) with documented meanings | A subset is already hand-coded in `_ALIASES` in [normalization.py](../src/asim_forge/source_semantics/normalization.py). Adopting the published dictionary grows source vocabulary without label leakage |
+| ArcSight CEF and IBM LEEF field dictionaries | The canonical abbreviation table (`src`, `dst`, `spt`, `dpt`, `suser`, `duser`, `deviceAction`) with documented meanings | A subset is already hand-coded in `_ALIASES` in [normalization.py](../../src/asim_forge/source_semantics/normalization.py). Adopting the published dictionary grows source vocabulary without label leakage |
 | Windows EventLog manifests (`wevtutil gp`, `.man` files) | Machine-readable EventData field names and types per event ID, generated locally | No redistribution question; complements OSSEM-DD's uneven coverage |
 | Zeek log documentation | Documented column names, types, and descriptions per log type | Strong NetworkSession source dictionary; BSD-licensed documentation |
 | RFC 5424 structured data and RFC 3164 | Normative syslog element semantics | `normative-schema` evidence class |
 
 ## Techniques from adjacent fields
 
-[The research note](semantic-mapping-research.md) covers semantic typing, schema
+[The research note](../research/semantic-mapping.md) covers semantic typing, schema
 matching, and log-specific systems. These adjacent fields fill gaps that note does
 not address. None is a near-term dependency; each is recorded so the relevant PR
 can adopt an established protocol instead of inventing one.

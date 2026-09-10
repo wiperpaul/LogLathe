@@ -32,7 +32,14 @@ from .schema_ranking import rank_clusters
 from .semantic_annotation import validate_semantic_promotion_artifacts
 from .semantic_mapping.comparison import compare_approaches, compare_split_approaches
 
-Track = Literal["parsing-gold", "format-diagnostic", "schema-hint", "semantic-gold"]
+Track = Literal[
+    "parsing-gold",
+    "format-diagnostic",
+    "schema-hint",
+    "semantic-gold",
+    "semantic-development",
+]
+SEMANTIC_TRACKS = frozenset({"semantic-gold", "semantic-development"})
 
 
 class BenchmarkError(ValueError):
@@ -81,9 +88,9 @@ class CorpusManifest(StrictModel):
     @model_validator(mode="after")
     def validate_track_inputs(self) -> CorpusManifest:
         roles = [resource.role for resource in self.resources]
-        if self.track == "semantic-gold":
+        if self.track in SEMANTIC_TRACKS:
             if self.cases is None or self.resources:
-                raise ValueError("semantic-gold corpora require cases and no remote resources")
+                raise ValueError("semantic corpora require cases and no remote resources")
             if self.split is None and self.evaluation_partition is not None:
                 raise ValueError("evaluation_partition requires a semantic split")
             if self.split is None and (
@@ -102,7 +109,7 @@ class CorpusManifest(StrictModel):
             or self.promotion_manifest is not None
             or self.evaluation_partition is not None
         ):
-            raise ValueError("only semantic-gold corpora may define a split")
+            raise ValueError("only semantic corpora may define a split")
         if self.track == "parsing-gold":
             if roles.count("gold") != 1 or self.gold_column is None:
                 raise ValueError("parsing-gold corpora require one gold resource and gold_column")
@@ -225,9 +232,9 @@ def run_benchmarks(
     baseline_path: Path | None = None,
 ) -> BenchmarkReport:
     manifests = load_corpus_manifests(registry)
-    needs_catalog = any(manifest.track == "semantic-gold" for _, manifest, _ in manifests)
+    needs_catalog = any(manifest.track in SEMANTIC_TRACKS for _, manifest, _ in manifests)
     if needs_catalog and catalog_dir is None:
-        raise BenchmarkError("--catalog is required when semantic-gold corpora are selected")
+        raise BenchmarkError("--catalog is required when semantic corpora are selected")
     catalog = load_catalog(catalog_dir) if needs_catalog and catalog_dir is not None else None
     cache = cache_dir or output_dir / "cache"
     corpora: list[CorpusSummary] = []
@@ -255,7 +262,7 @@ def run_benchmarks(
                 fingerprint=fingerprint,
             )
         )
-        if manifest.track == "semantic-gold":
+        if manifest.track in SEMANTIC_TRACKS:
             assert catalog is not None and manifest.cases is not None
             cases = load_semantic_mapping_cases(_relative_file(path, manifest.cases))
             if manifest.split is None:
@@ -570,55 +577,27 @@ def render_markdown(report: BenchmarkReport) -> str:
             "",
             "## ASIM semantic mapping",
             "",
-            "Only corpora whose labels are independently adjudicated support an ASIM "
-            "correctness claim. Read the permitted claim for each corpus above.",
+            "Gold and development results are reported separately because only independently "
+            "adjudicated labels support an ASIM correctness claim. Read the permitted claim "
+            "for each corpus above.",
+            "",
+            "### Semantic gold and contract fixtures",
             "",
         ]
     )
-    semantic_rows = [row for row in report.results if row.track == "semantic-gold"]
+    lines.extend(_semantic_table(report, summaries, "semantic-gold"))
     lines.extend(
-        _table(
-            [
-                "Corpus",
-                "Split",
-                "Approach",
-                "Refs/cases",
-                "Schema@1",
-                "Cand@5",
-                "Role F1",
-                "Facet F1",
-                "Field F1",
-                "Field F1 CI",
-                "Exact",
-                "Delta",
-            ],
-            [
-                [
-                    summaries[row.corpus_id].title,
-                    (
-                        f"{row.split_id}:{row.evaluation_partition}"
-                        if row.split_id is not None
-                        else "—"
-                    ),
-                    row.approach,
-                    (
-                        f"{row.reference_item_count}/{row.item_count}"
-                        if row.reference_item_count is not None
-                        else f"—/{row.item_count}"
-                    ),
-                    _number(row.metrics["schema_top1_accuracy"]),
-                    _number(row.metrics.get("candidate_recall_at_5", 0)),
-                    _number(row.metrics["source_micro_f1"]),
-                    _number(row.metrics.get("source_facet_micro_f1", 0)),
-                    _number(row.metrics["field_micro_f1"]),
-                    _interval(row.primary_metric_low, row.primary_metric_high),
-                    _number(row.metrics["mapping_exact_match"]),
-                    _delta(row.baseline_delta),
-                ]
-                for row in semantic_rows
-            ],
-        )
+        [
+            "",
+            "### Checked development labels",
+            "",
+            "These rows score checked but unadjudicated labels for error discovery and "
+            "approach comparison. They do not support an ASIM correctness claim and are "
+            "never combined with semantic gold.",
+            "",
+        ]
     )
+    lines.extend(_semantic_table(report, summaries, "semantic-development"))
     lines.extend(_resolution_section(report))
     lines.extend(_robustness_section(report))
     if report.warnings:
@@ -627,6 +606,51 @@ def render_markdown(report: BenchmarkReport) -> str:
     lines.extend(_attribution_section(report))
     lines.append("")
     return "\n".join(lines)
+
+
+def _semantic_table(
+    report: BenchmarkReport,
+    summaries: dict[str, CorpusSummary],
+    track: Literal["semantic-gold", "semantic-development"],
+) -> list[str]:
+    rows = [row for row in report.results if row.track == track]
+    return _table(
+        [
+            "Corpus",
+            "Split",
+            "Approach",
+            "Refs/cases",
+            "Schema@1",
+            "Cand@5",
+            "Role F1",
+            "Facet F1",
+            "Field F1",
+            "Field F1 CI",
+            "Exact",
+            "Delta",
+        ],
+        [
+            [
+                summaries[row.corpus_id].title,
+                (f"{row.split_id}:{row.evaluation_partition}" if row.split_id is not None else "—"),
+                row.approach,
+                (
+                    f"{row.reference_item_count}/{row.item_count}"
+                    if row.reference_item_count is not None
+                    else f"—/{row.item_count}"
+                ),
+                _number(row.metrics["schema_top1_accuracy"]),
+                _number(row.metrics.get("candidate_recall_at_5", 0)),
+                _number(row.metrics["source_micro_f1"]),
+                _number(row.metrics.get("source_facet_micro_f1", 0)),
+                _number(row.metrics["field_micro_f1"]),
+                _interval(row.primary_metric_low, row.primary_metric_high),
+                _number(row.metrics["mapping_exact_match"]),
+                _delta(row.baseline_delta),
+            ]
+            for row in rows
+        ],
+    )
 
 
 def _provenance_section(report: BenchmarkReport) -> list[str]:

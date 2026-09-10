@@ -1,7 +1,13 @@
 # Non-LLM semantic-mapping baseline and corpus plan
 
-Status: research decision and acquisition plan
-Last reviewed: 2026-09-01
+Status: dated research and acquisition record; not authoritative for current implementation status
+Research reviewed: 2026-09-01
+Archived: 2026-09-10
+
+This document preserves the evidence-acquisition strategy and proposed approach
+ladder at the review date. Several early rungs have since been implemented. See the
+[current evaluation guide](../evaluation.md), [current architecture](../architecture.md),
+and [roadmap](../../ROADMAP.md) for present behavior and remaining work.
 
 ## Decision
 
@@ -32,8 +38,9 @@ and agreement with existing implementations; unlabelled logs add operational
 diagnostics only. Together they expose leakage and measure which context changes
 an answer, but they are not sufficient to select an unattended production mapper.
 This preserves the evidence boundary already established in [the benchmark
-design](benchmark-releases.md), [the fixture contract](evaluation-fixtures.md), and the
-[semantic-mapping research note](semantic-mapping-research.md).
+design](../evaluation.md#benchmark-tracks-and-corpora), [the fixture
+contract](../dataset-curation.md#semantic-mapping-case-contract), and the
+[semantic-mapping research note](semantic-mapping.md).
 
 ## What the current baseline really is
 
@@ -216,7 +223,7 @@ supports, preserve its evidence, and be ablated against the rung below it. That
 interface is a v2 requirement: the existing ASIM-flat prediction contract can
 adapt N0-N1 for direct mappings, but it cannot express OCSF paths, transforms,
 mapping kinds, one-to-many mappings, or explicit out-of-schema outcomes. This
-extends the repository's [ASIM-first, target-neutral direction](../ROADMAP.md#direction--asim-first-target-neutral)
+extends the repository's [ASIM-first, target-neutral architecture](../architecture.md#source-and-target-seams)
 rather than pretending the current provider boundary is already target-neutral.
 
 | ID | Approach | Purpose |
@@ -369,7 +376,7 @@ them as robustness slices so synthetic volume cannot dominate the headline.
 
 ## Split and leakage rules
 
-Use the existing [grouped split contract](semantic-dataset-splits.md), extended to
+Use the existing [grouped split contract](../dataset-curation.md#4-author-and-lock-grouped-splits), extended to
 silver tracks where necessary:
 
 - group by vendor/product/parser or integration package and template family;
@@ -392,7 +399,7 @@ without confusing it with algorithmic inference.
 
 ## Metrics and reports
 
-Retain the current metrics in [the metric contract](evaluation-metrics.md) and add
+Retain the current metrics in [the metric contract](../evaluation.md#metric-reference) and add
 the missing diagnostics by task and evidence track:
 
 - candidate recall@k, MRR/MAP, and candidate reduction ratio before final ranking;
@@ -453,7 +460,7 @@ These expose where the next improvement should be made.
 4. Define the restricted structured-lineage representation and validate it on a
    few hand-inspected ASIM parser fragments before corpus-scale extraction. This
    also resolves the structured-input work identified in the
-   [log-input enrichment backlog](log-input-enrichment-backlog.md).
+   [deferred input-adapter work](../../ROADMAP.md#deliberately-deferred).
 
 ### Baseline release B1: automated ASIM silver
 
@@ -488,7 +495,7 @@ These expose where the next improvement should be made.
    calibration set is used for tuning.
 
 The existing 30-50 case plan in
-[the semantic pilot](../evaluation/semantic-pilot/README.md) remains the next
+[the semantic pilot](../dataset-curation.md#pilot-composition) remains the next
 independent calibration step. The number of final held-out cases should be driven
 by source-family coverage and bootstrap interval width, not by event count alone.
 
@@ -575,4 +582,4 @@ agents, local models, or LLM providers can later demonstrate an actual improveme
 
 The sequenced implementation of that answer, including the floor, oracle, and
 identifiability reference points it depends on, is in
-[the field-mapping baseline plan](field-mapping-baseline-plan.md).
+[the field-mapping baseline record](../archive/field-mapping-baseline.md).
