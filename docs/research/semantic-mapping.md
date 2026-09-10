@@ -1,11 +1,18 @@
 # Semantic typing and schema matching research note
 
-Status: working architecture note
-Last reviewed: 2026-08-29
+Status: dated research record; not authoritative for current implementation status
+Research reviewed: 2026-08-29
+Archived: 2026-09-10
+
+This document preserves the research and decision context that shaped the current
+architecture. Statements about the "next" experiment reflect the project state at
+the review date. See [the current architecture](../architecture.md),
+[evaluation guide](../evaluation.md), and [roadmap](../../ROADMAP.md) for present
+behavior and remaining work.
 
 ## Question
 
-Should ASIM Forge maintain both a semantic rule engine and a model-based matcher,
+Should LogLathe maintain both a semantic rule engine and a model-based matcher,
 or can one approach provide useful ASIM suggestions without creating two feedback
 and release cycles?
 
@@ -24,7 +31,7 @@ parts are usually learned components plus small deterministic constraints:
 - hand-written rules remain useful for closed-form types, output constraints,
   and validation, but are not normally the main semantic classifier.
 
-This distinction means ASIM Forge does not need two full semantic engines. It can
+This distinction means LogLathe does not need two full semantic engines. It can
 have one versioned suggestion-provider boundary surrounded by catalogue-derived
 candidate filtering and validation that are required regardless of the provider.
 
@@ -45,7 +52,7 @@ a proposal for another human gate or AI framework.
 | [TabEmb (ACL 2026)](https://aclanthology.org/2026.acl-long.757/) | Frozen LLM column embeddings plus a trainable graph model for inter-column structure | Across its tasks and datasets, the no-graph variant averaged 88.3 micro-F1 and the graph-attention variant 92.1; it reports the strongest average result among its eight baselines | The current leading direction is hybrid semantic/structural learning, not semantic rules plus a model. Context is a measurable part of the gain. |
 
 The benchmarks are not ASIM benchmarks. Their absolute scores must not be used
-as an expected ASIM Forge accuracy. They nevertheless show a stable pattern:
+as an expected LogLathe accuracy. They nevertheless show a stable pattern:
 value shape alone is insufficient, context helps, and closed-set learned models
 can fail sharply when the source distribution changes.
 
@@ -77,7 +84,7 @@ mapping or a single unrestricted prompt.
 
 ## How ASIM mapping differs
 
-ASIM Forge is not performing ordinary column typing:
+LogLathe is not performing ordinary column typing:
 
 - a typed slot is extracted from a message template rather than a named table
   column;
@@ -89,7 +96,7 @@ ASIM Forge is not performing ordinary column typing:
 - the target catalogue is known, versioned, and much smaller than an open-world
   ontology.
 
-This gives ASIM Forge stronger deterministic constraints than general semantic
+This gives LogLathe stronger deterministic constraints than general semantic
 typing, but also makes a value-only classifier less applicable. Template text,
 slot order, peer slots, representative events, source metadata, schema guidance,
 and catalogue field properties should be treated as one mapping context.
@@ -100,7 +107,7 @@ Generic table benchmarks only approximate this problem. The closest published
 systems suggest that log understanding, target-schema projection, and executable
 validation are separable concerns.
 
-| Work | What it adds | Implication for ASIM Forge |
+| Work | What it adds | Implication for LogLathe |
 | --- | --- | --- |
 | [Matryoshka (2025 preprint; also a 2026 Berkeley dissertation chapter)](https://arxiv.org/abs/2506.17512) | Generates a syntactic parser, meaningful source-field names, and optional OCSF or UDM mappings, then runs static regex rather than an LLM on live logs | Preserve a source-semantic representation before ASIM projection. The paper's normalized-taxonomy mapping was markedly harder than its source-semantic extraction, so the two errors should be measurable separately. |
 | [LogNER (Journal of Systems and Software, 2026)](https://www.sciencedirect.com/science/article/pii/S0164121226001251) | Frames log understanding as template-assisted entity recognition rather than only variable extraction | Semantic entities and important constants may not align one-to-one with parser slots. Evaluate event-level roles as well as slot labels. |
@@ -115,7 +122,7 @@ Elastic reports 94% parsing accuracy and 91% log-partitioning accuracy on its
 Loghub experiment. The result is useful engineering evidence, but the article is
 not a peer-reviewed evaluation and does not define enough of the metric,
 prompt, model version, repeated-run variance, or held-out split to make those
-numbers a comparable benchmark for ASIM Forge. A random 20% sample from each
+numbers a comparable benchmark for LogLathe. A random 20% sample from each
 data source may also allow closely related formats to appear in both generation
 and evaluation data. Treat the figures as motivation for an experiment, not an
 expected performance level.
@@ -132,12 +139,12 @@ Four observations are directly relevant:
   invocation. This is consistent with keeping deterministic clustering and
   candidate preparation outside the semantic provider.
 - **Open-ended names drift.** Elastic observed source- and field-name variation
-  between runs and normalized the outputs afterward. ASIM Forge should instead
+  between runs and normalized the outputs afterward. LogLathe should instead
   constrain schema and field outputs to the pinned catalogue and preserve the
   ranked candidates that led to the choice.
 - **Outlier removal has a security cost.** Elastic drops fingerprint subclasses
   below 5% of volume to protect parsing quality. Rare security events may be the
-  most important events, so ASIM Forge must never silently discard them. Low
+  most important events, so LogLathe must never silently discard them. Low
   coverage should produce an explicit outlier, abstention, or human-review path.
 
 The immediate experiment is therefore not to replace DeepParse or add an LLM
@@ -159,7 +166,7 @@ schema, preserve provenance, and feed deterministic validation and human review.
 These are alternatives to a growing semantic rule engine, not requirements to
 implement together.
 
-| Design | Research basis | Small ASIM Forge version |
+| Design | Research basis | Small LogLathe version |
 | --- | --- | --- |
 | Source semantic frame | Matryoshka, LogNER, OntoLogX | Infer `actor`, `action`, `target`, `result`, `network_source`, and similar source roles, then project those roles to ASIM. Keep the vocabulary deliberately small and allow unknown/custom roles. |
 | Retrieval from approved cases | MicLog; [REVEAL, accepted at SIGMOD 2026](https://arxiv.org/abs/2508.17203) | Retrieve a few diverse, relevant reviewed clusters and ASIM concept cards. Begin with lexical/BM25 retrieval; embeddings are an optional provider detail. |
@@ -280,7 +287,7 @@ Before choosing a production semantic implementation:
 This postpones the expensive semantic-rule feedback cycle without blocking the
 data contracts, review UI, catalogue constraints, or eventual model integration.
 
-The companion [non-LLM baseline and corpus plan](non-llm-baseline-corpus.md)
+The companion [non-LLM baseline and corpus plan](baseline-strategy.md)
 turns this experiment into an acquisition design. It keeps parser-derived ASIM,
 paired OCSF, cross-schema source semantics, synthetic stress cases, and future
 adjudicated gold in separate evidence tracks, and measures the additional value of

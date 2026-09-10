@@ -2,8 +2,8 @@
   "format_version": "1",
   "corpus_id": "asim-cef-dev",
   "title": "CEF and syslog development mapping cases",
-  "track": "semantic-gold",
-  "objective": "Discriminate mapping approaches across independent source families",
+  "track": "semantic-development",
+  "objective": "Diagnose mapping behavior on checked CEF and syslog development cases",
   "system": "asim-forge-dev",
   "interpretation": "Unadjudicated development labels derived from documented CEF field meaning and the pinned ASIM schema. Useful for error discovery and approach comparison; it is not adjudicated gold and supports no ASIM correctness claim. No grouped split is defined, so case-retrieval sees near-identical siblings from its own source family and its score here is leakage rather than quality.",
   "source": {

@@ -1,26 +1,20 @@
 ## Summary
 
-<!-- What does this PR change, and why? -->
-
-## What changed
-
+<!-- Use 1-3 bullets. State the outcome and why it matters; leave the work log out. -->
 -
 
 ## Validation
 
-<!-- List the tests or manual checks you performed. -->
+<!-- List exact commands or manual checks and their results. Use "Not run - reason" when applicable. -->
+-
 
-- [ ] Tests pass
-- [ ] Formatting and lint checks pass
-- [ ] Manual review completed, if applicable
+## Reviewer notes
 
-## Review impact
-
-<!-- For UI or workflow changes, describe what the reviewer will experience. Add screenshots when useful. -->
+<!-- Optional: call out risks, tradeoffs, migrations, or areas needing close review. Remove this section if none. -->
 
 ## Checklist
 
-- [ ] The change is scoped to a roadmap milestone or clearly documented goal
-- [ ] New or changed behaviour has test coverage where practical
-- [ ] Generated artefacts, logs, and sensitive event data are not committed
-- [ ] Documentation is updated where needed
+- [ ] I reviewed the diff and removed unrelated changes
+- [ ] Tests and documentation are updated where needed
+- [ ] The summary and validation claims match the diff and command output
+- [ ] No secrets, generated artefacts, operational logs, or sensitive data are committed

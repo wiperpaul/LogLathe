@@ -1,4 +1,4 @@
-"""ASIM Forge's public package surface."""
+"""LogLathe's public surface under the compatibility package name ``asim_forge``."""
 
 from .models import ClusterRecord, ParsedCluster, ParserSpecification, ReviewDecision, SourceEvent
 

@@ -232,7 +232,7 @@ def register_evaluation_parser(
     evaluation_benchmark.add_argument(
         "--catalog",
         type=Path,
-        help="Pinned ASIM catalogue (required when semantic-gold corpora are present)",
+        help="Pinned ASIM catalogue (required when semantic corpora are present)",
     )
     evaluation_benchmark.add_argument("--output", type=Path, default=Path("artifacts/evaluation"))
     evaluation_benchmark.add_argument("--cache", type=Path, help="Optional shared download cache")
