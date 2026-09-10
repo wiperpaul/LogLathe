@@ -1,0 +1,69 @@
+{
+  "format_version": "1",
+  "fixture_id": "openssh-authentication-v1",
+  "track": "asim-parser-silver",
+  "group_id": "openbsd-openssh",
+  "source_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_name": "Authentication",
+  "schema_version": "0.1.3",
+  "source_table": "Syslog",
+  "message_field": "SyslogMessage",
+  "vendor": "OpenBSD",
+  "product": "OpenSSH",
+  "csv_file": "source.csv",
+  "parser_file": "parser.yaml",
+  "helpers": [
+    "resolve-fqdn.yaml",
+    "resolve-dvc.yaml",
+    "resolve-src.yaml"
+  ],
+  "columns": {
+    "TimeGenerated": "datetime",
+    "Computer": "string",
+    "SyslogMessage": "string",
+    "ProcessName": "string",
+    "ProcessID": "int",
+    "HostIP": "string",
+    "Type": "string",
+    "_ItemId": "string",
+    "_ResourceId": "string",
+    "_SubscriptionId": "string"
+  },
+  "datetime_format": "%m/%d/%Y %I:%M:%S %p",
+  "resources": [
+    {
+      "file": "source.csv",
+      "source_path": "Sample Data/ASIM/OpenBSD_OpenSSH_Authentication_IngestedLogs.csv",
+      "sha256": "2f432f5c46bee40113f8cb7ca9f1f21cabdc020eb8f224963e08390803865436"
+    },
+    {
+      "file": "parser.yaml",
+      "source_path": "Parsers/ASimAuthentication/Parsers/ASimAuthenticationSshd.yaml",
+      "sha256": "6d1ea078e1bd5e9fa92463ea2342e043042a7204a1a8b5a5a9b860f542b125f6"
+    },
+    {
+      "file": "resolve-fqdn.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveFQDN.yaml",
+      "sha256": "bf594fe8b3e6c2413a2999bc539e1c2a09dfc4369d130087bd824a38eb91130a"
+    },
+    {
+      "file": "resolve-dvc.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveDvcFQDN.yaml",
+      "sha256": "a1b5261477e4c18af205b82b73f61aa5e2c76ea2cada7c8bc41b41bca8bf27d9"
+    },
+    {
+      "file": "resolve-src.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveSrcFQDN.yaml",
+      "sha256": "c019837a7709b1f9275b54042bee9cefd86f55956ef0c3a97a5efcc5b4841f53"
+    },
+    {
+      "file": "LICENSE.upstream",
+      "source_path": "LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    }
+  ],
+  "redistribution": "content",
+  "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
+  "mutation_suite": "openssh-v1"
+}

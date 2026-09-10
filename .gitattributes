@@ -1,2 +1,5 @@
 # Normalize all text files to LF line endings regardless of platform autocrlf settings.
 * text=auto eol=lf
+
+# Upstream fixtures and native snapshots have byte-level provenance hashes.
+evaluation/reference/** -text

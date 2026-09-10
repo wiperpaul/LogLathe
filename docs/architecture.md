@@ -124,8 +124,11 @@ and must not be compared as though the tasks had identical granularity.
 | `reviews.py` | Canonical and Potato cluster-decision readers |
 | `compiler.py` | Deterministic parser-specification and KQL candidate generation |
 | `benchmarking.py` | Evidence-separated corpus execution and reporting |
+| `reference/` | Pinned source-table fixtures, native Kusto captures, and output comparison; reuses the build and Potato workflow |
 
 Concrete workflows are documented in the [operator guide](operator-workflow.md),
 [evaluation guide](evaluation.md), and [dataset-curation guide](dataset-curation.md).
+The [reference pilot guide](reference-pilot.md) covers native functional checks and
+how public samples enter the existing review workflow.
 Future changes and deliberately deferred work belong in the [roadmap](../ROADMAP.md),
 not in this description of the current system.

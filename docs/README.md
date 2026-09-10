@@ -10,6 +10,7 @@ Choose the guide that matches the work you are doing. The root
 | Audience or task | Start here | Canonical content |
 | --- | --- | --- |
 | First-time user | [Operator workflow](operator-workflow.md) | Build, cluster review, catalogue sync, compilation, and artifacts |
+| First pilot reviewer | [Reference pilot](reference-pilot.md) | Public SSH samples, native output replay, and the existing Potato review workflow |
 | Evaluator or approach developer | [Evaluation](evaluation.md) | Registered approaches, metrics, robustness, corpora, and reports |
 | Dataset curator or annotator | [Dataset curation](dataset-curation.md) | Fixture contract, blinded annotation, promotion, grouping, and splits |
 | Contributor or integrator | [Architecture](architecture.md) | Current boundaries, package ownership, and target-neutral seams |

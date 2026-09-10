@@ -12,7 +12,9 @@ repos:
       - id: check-yaml
       - id: detect-private-key
       - id: end-of-file-fixer
+        exclude: ^evaluation/reference/[^/]+/(source\.csv|parser\.yaml|resolve-.*\.yaml|LICENSE\.upstream)$
       - id: trailing-whitespace
+        exclude: ^evaluation/reference/[^/]+/(source\.csv|parser\.yaml|resolve-.*\.yaml|LICENSE\.upstream)$
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: b84c4a0a90bd58c7d82ae8f0d4d5e77b1ddd3ce6 # 0.12.5

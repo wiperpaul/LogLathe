@@ -9,3 +9,11 @@ License: Apache License 2.0
 Potato is an optional review dependency and is not vendored.
 https://github.com/davidjurgens/potato
 License: GNU General Public License v3.0 or later
+
+Microsoft Azure-Sentinel OpenSSH samples, ASIM parser, and helper functions
+Copyright Microsoft Corporation.
+https://github.com/Azure/Azure-Sentinel
+Pinned commit: 027a0f9338bfabcb27b784571b771c54572ebf01
+License: MIT; retained in evaluation/reference/openssh/LICENSE.upstream.
+Original paths and byte checksums: evaluation/reference/openssh/manifest.json.
+The native reference output is derived from these public parser-development samples.

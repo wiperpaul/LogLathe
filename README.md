@@ -52,7 +52,8 @@ reviewer does not see an ASIM suggestion that could anchor the initial decision.
 | Ranking, mapping, facet, candidate, robustness, and statistical metrics | Implemented |
 | Evidence-separated corpus reports and evaluation prereleases | Implemented |
 | Integrated ASIM mapping-review UI | Planned |
-| Schema/data validation and Sentinel execution | Planned |
+| Native Kusto reference fixtures and bounded catalogue checks | Implemented for the OpenSSH pilot |
+| Complete ASIM tester integration and Sentinel execution | Planned |
 | Additional normalization targets such as OCSF | Planned; contributions welcome |
 | Automatic production deployment | Not implemented |
 
@@ -97,6 +98,8 @@ The [documentation index](docs/README.md) routes readers by task:
   corpora, and release reports;
 - [dataset curation](docs/dataset-curation.md) — fixtures, blinded annotation,
   promotion, grouping, and leakage-resistant splits;
+- [reference pilot](docs/reference-pilot.md) — public SSH samples, native output
+  comparisons, and a first session in the existing Potato workflow;
 - [roadmap](ROADMAP.md) — current milestone and future work; and
 - [contributing](CONTRIBUTING.md) — development checks and contribution guidance.
 
