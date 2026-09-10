@@ -9,6 +9,7 @@ from pathlib import Path
 from .benchmarking import BenchmarkError
 from .catalog import sync_catalog
 from .commands.evaluation import register_evaluation_parser, run_evaluation_command
+from .commands.reference import register_reference_parser, run_reference_command
 from .compiler import compile_reviews
 from .evaluation import EvaluationError
 from .ingestion import InputError
@@ -60,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     register_evaluation_parser(subparsers)
+    register_reference_parser(subparsers)
     return parser
 
 
@@ -100,6 +102,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                 f"{catalog_manifest.field_count} field definitions from "
                 f"Azure-Sentinel@{catalog_manifest.resolved_revision} into {args.output}"
             )
+        elif args.command == "reference":
+            run_reference_command(args)
         else:
             run_evaluation_command(args)
     except (
@@ -108,6 +112,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         InputError,
         ReviewError,
         UnicodeError,
+        OSError,
         ValueError,
     ) as error:
         parser.error(str(error))

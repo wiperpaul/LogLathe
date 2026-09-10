@@ -46,6 +46,20 @@ group-aware statistics, and evidence-separated benchmark reports.
 Goal: after cluster approval, carry an eligible reviewer directly into an editable,
 prefilled ASIM suggestion without losing context or weakening the Stage 1 decision.
 
+### Immediate checkpoint — first reference pilot
+
+The [OpenSSH reference pilot](docs/reference-pilot.md) now provides pinned public
+inputs, ten controlled variants, native Kusto reference capture/replay, value and
+row comparisons, and bounded catalogue checks. Public samples pass through the
+existing build, Potato review, annotation queue, and reviewed compilation workflow.
+
+The next checkpoint requires a security engineer to review the source clusters.
+Then prepare the existing annotation queue for approved clusters, resolve
+reference/candidate disagreements, and turn reviewed findings into regression
+fixtures. Expand to two additional source families after that first loop. This
+pulls a bounded slice of milestone 3 forward; it does not complete the continuous
+mapping-review UI.
+
 ### Source onboarding and preparation
 
 - Introduce a source-onboarding record for vendor, product, source table, message
@@ -57,6 +71,14 @@ prefilled ASIM suggestion without losing context or weakening the Stage 1 decisi
   record rather than overwriting provider output.
 
 ### Progressive review experience
+
+Keep cluster review brief and focused on source defects: malformed records,
+incorrect event boundaries, split multiline events, unrelated examples grouped
+together, and extraction that loses useful values. Prioritize suspicious clusters
+and make the original record and adjacent source context available when diagnosing
+boundary problems. Single-example clusters need an explicit indication that
+variation has not been demonstrated. Preserve explicit cluster decisions while
+reducing repetitive review of similar, apparently coherent patterns.
 
 1. Show cluster evidence without exposing the ASIM answer.
 2. Save the cluster decision as an independently auditable checkpoint.
@@ -111,6 +133,11 @@ Goal: turn an approved mapping into a parser candidate with actionable checks.
 
 Exit criteria: every candidate reports target coverage, test evidence, warnings,
 and the exact input, catalogue, mapping, and generator revisions used.
+
+Current partial implementation: the reference pilot executes KQL natively and
+checks mandatory fields, physical types, enumerations, and IP addresses on both
+reference and candidate output. Official ASIM tester integration, conditional
+requirements, aliases, and complete validation decisions remain outstanding.
 
 ## Milestone 4 — Agreement, packaging, and release gates
 

@@ -247,6 +247,14 @@ automatically for each semantic corpus and keeps them in a separate section.
 
 ## Benchmark tracks and corpora
 
+Native parser functional regression is available separately through
+`asim-forge reference`; see the [reference pilot](reference-pilot.md). Its
+`asim-parser-silver` captures compare values, physical types, and event retention
+against a pinned executable parser. They are not registered in the corpus benchmark
+below or combined with semantic-development/gold metrics. Public samples enter the
+existing build and Potato workflow; semantic annotation and candidate compilation
+continue through the established review boundaries.
+
 The release-style benchmark answers a narrow question: did code or evaluation data
 change behavior on fixed, inspectable corpora? Every track has a distinct evidence
 claim, and scores are never combined across tracks.
