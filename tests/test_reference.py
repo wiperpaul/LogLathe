@@ -13,6 +13,7 @@ from asim_forge.compiler import compile_reviews
 from asim_forge.models import AsimCatalog, AsimCatalogField, AsimCatalogManifest
 from asim_forge.reference.comparison import compare_captures, compare_outputs, conformance
 from asim_forge.reference.contracts import QueryOutput
+from asim_forge.reference.evidence import reference_review_evidence
 from asim_forge.reference.execution import (
     KustoClient,
     load_capture,
@@ -333,6 +334,32 @@ def test_potato_state_feeds_existing_annotation_queue_and_compile_without_conver
     assert tasks[0].provenance.reviewer_ref == "test reviewer"
     assert tasks[0].provenance.cluster_file_sha256 == bundle.files["build/clusters.jsonl"]
     assert "schema_suggestion" not in tasks[0].model_dump_json()
+
+    evidence = reference_review_evidence(
+        FIXTURE, path, FIXTURE / "reference-output.json", tasks, _catalog()
+    )[tasks[0].case_id]
+    sample = tasks[0].input.representative_events[0]
+    assert evidence.examples[0].source_values["SyslogMessage"] == sample.text
+    assert evidence.examples[0].event_id == f"sample-{sample.line_number:03d}"
+    assert evidence.source_columns["TimeGenerated"] == "datetime"
+    native = load_capture(FIXTURE / "reference-output.json")
+    expected = next(
+        item.output for item in native.outputs if item.event_id == evidence.examples[0].event_id
+    )
+    assert evidence.examples[0].output == expected
+    # Row identity alone is insufficient if the task text or build has changed.
+    changed = tasks[0].model_copy(deep=True)
+    changed.input.representative_events[0].text = "another event"
+    with pytest.raises(ValueError, match="source row"):
+        reference_review_evidence(
+            FIXTURE, path, FIXTURE / "reference-output.json", [changed], _catalog()
+        )
+    changed = tasks[0].model_copy(deep=True)
+    changed.provenance.cluster_file_sha256 = "0" * 64
+    with pytest.raises(ValueError, match="same build"):
+        reference_review_evidence(
+            FIXTURE, path, FIXTURE / "reference-output.json", [changed], _catalog()
+        )
 
 
 @pytest.mark.parametrize(

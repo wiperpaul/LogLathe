@@ -6,10 +6,14 @@ import html
 import json
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
-from .models import ParsedCluster, ReviewTask
+from .models import AsimCatalog, ParameterSlot, ParsedCluster, ReviewTask, SourceEvent
+
+if TYPE_CHECKING:
+    from .mapping_review import MappingReviewTask
 
 _PLACEHOLDER = re.compile(r"<VAR:[A-Za-z0-9_]+>")
 
@@ -33,64 +37,70 @@ def write_potato_bundle(
 
 
 def _to_review_task(cluster: ParsedCluster) -> ReviewTask:
+    return ReviewTask(
+        id=cluster.cluster_id,
+        cluster_id=cluster.cluster_id,
+        event_count=cluster.event_count,
+        **source_evidence(cluster.template, cluster.representative_events, cluster.parameter_slots),
+    )
+
+
+def source_evidence(
+    template: str,
+    representative_events: list[SourceEvent],
+    parameter_slots: list[ParameterSlot],
+) -> dict:
+    """Shared source display for cluster coherence and subsequent mapping review."""
     samples = "\n".join(
-        f"[{event.source_file}:{event.line_number}] {event.text}"
-        for event in cluster.representative_events
+        f"[{event.source_file}:{event.line_number}] {event.text}" for event in representative_events
     )
     slots = (
         "\n".join(
             f"- {slot.slot_id} {slot.placeholder}: {', '.join(slot.examples) or 'no samples'}"
-            for slot in cluster.parameter_slots
+            for slot in parameter_slots
         )
         or "- No parameters detected"
     )
-    text = (
-        f"TEMPLATE\n{cluster.template}\n\n"
-        f"REPRESENTATIVE EVENTS\n{samples}\n\n"
-        f"PARAMETER SLOTS\n{slots}"
-    )
+    text = f"TEMPLATE\n{template}\n\nREPRESENTATIVE EVENTS\n{samples}\n\nPARAMETER SLOTS\n{slots}"
     representative_events_table: dict[str, object] = {
         "headers": ["Source", "Event"],
         "rows": [
             [f"{event.source_file}:{event.line_number}", event.text]
-            for event in cluster.representative_events
+            for event in representative_events
         ],
     }
     parameter_slots_table: dict[str, object] = {
         "headers": ["Slot", "Type", "Example values"],
         "rows": [
             [slot.slot_id, slot.label, ", ".join(slot.examples) or "No samples"]
-            for slot in cluster.parameter_slots
+            for slot in parameter_slots
         ],
     }
-    return ReviewTask(
-        id=cluster.cluster_id,
-        text=text,
-        cluster_id=cluster.cluster_id,
-        template=cluster.template,
-        template_html=_render_template_html(cluster),
-        event_count=cluster.event_count,
-        representative_events_table=representative_events_table,
-        parameter_slots_table=parameter_slots_table,
-        parameter_slots=[slot.model_dump(mode="json") for slot in cluster.parameter_slots],
-    )
+    return {
+        "text": text,
+        "template": template,
+        "template_html": _render_template_html(template, parameter_slots),
+        "representative_events_table": representative_events_table,
+        "parameter_slots_table": parameter_slots_table,
+        "parameter_slots": [slot.model_dump(mode="json") for slot in parameter_slots],
+    }
 
 
-def _render_template_html(cluster: ParsedCluster) -> str:
+def _render_template_html(template: str, parameter_slots: list[ParameterSlot]) -> str:
     parts: list[str] = []
     cursor = 0
-    matches = list(_PLACEHOLDER.finditer(cluster.template))
+    matches = list(_PLACEHOLDER.finditer(template))
     for index, match in enumerate(matches):
-        parts.append(html.escape(cluster.template[cursor : match.start()]))
-        if index < len(cluster.parameter_slots):
-            slot = cluster.parameter_slots[index]
+        parts.append(html.escape(template[cursor : match.start()]))
+        if index < len(parameter_slots):
+            slot = parameter_slots[index]
             parts.append(
                 f"<mark><code>{html.escape(slot.slot_id)} · {html.escape(slot.label)}</code></mark>"
             )
         else:
             parts.append(html.escape(match.group(0)))
         cursor = match.end()
-    parts.append(html.escape(cluster.template[cursor:]))
+    parts.append(html.escape(template[cursor:]))
     return "".join(parts)
 
 
@@ -182,3 +192,62 @@ def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
         for record in records:
             handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True))
             handle.write("\n")
+
+
+def write_mapping_potato_bundle(
+    tasks: list[MappingReviewTask],
+    catalog: AsimCatalog,
+    output_dir: Path,
+) -> None:
+    """Use Potato's task-layout extension and its ordinary annotation storage."""
+    from .mapping_review import initial_mapping_draft
+
+    bundle = output_dir / "potato"
+    bundle.mkdir()
+    fields = {
+        name: [field.model_dump(mode="json") for field in catalog.fields_for_schema(name)]
+        for name in ("Authentication", "NetworkSession", "AuditEvent")
+        if name in catalog.manifest.schemas
+    }
+    items = []
+    for task in sorted(tasks, key=lambda task: (not task.cluster_notes, task.source_task.case_id)):
+        source = task.source_task.input
+        items.append(
+            {
+                "id": task.source_task.case_id,
+                **source_evidence(
+                    source.template, source.representative_events, source.parameter_slots
+                ),
+                "mapping_task": task.model_dump(mode="json"),
+                "initial_draft": initial_mapping_draft(task, catalog).model_dump(mode="json"),
+                "catalogue_fields": fields,
+            }
+        )
+    _write_jsonl(bundle / "items.jsonl", items)
+    config = _potato_config()
+    config.update(
+        {
+            "annotation_task_name": "LogLathe ASIM mapping review",
+            "host": "127.0.0.1",
+            "task_layout": "mapping-layout.html",
+            "annotation_instructions": (
+                "<p>Review suggested ASIM mappings against the source evidence. "
+                "Correct fields and conversions, add missing mappings, or flag needed extraction. "
+                "Reference output is implementation-derived evidence and can be wrong. "
+                "Mapping approval is separate from parser validation.</p>"
+            ),
+            "annotation_schemes": [
+                {
+                    "annotation_type": "text",
+                    "name": "mapping_review",
+                    "description": "Assisted mapping decision",
+                    "multiline": True,
+                }
+            ],
+        }
+    )
+    (bundle / "config.yaml").write_text(
+        yaml.safe_dump(config, sort_keys=False), encoding="utf-8", newline="\n"
+    )
+    layout = Path(__file__).with_name("mapping_review.html").read_text(encoding="utf-8")
+    (bundle / "mapping-layout.html").write_text(layout, encoding="utf-8", newline="\n")

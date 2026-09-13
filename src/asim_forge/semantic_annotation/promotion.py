@@ -15,13 +15,10 @@ from ..evaluation import (
 from ..evaluation_splits import SemanticCaseGroup, write_semantic_case_groups
 from ..models import AsimCatalog, AsimCatalogField
 from .artifacts import (
-    _load_queue_manifest,
-    _queue_output_path,
     _sha256_file,
-    _validate_queue_contents,
     _write_json,
     load_semantic_annotation_decisions,
-    load_semantic_annotation_tasks,
+    load_semantic_annotation_queue,
 )
 from .contracts import (
     CASE_GROUPS_FILE,
@@ -45,15 +42,7 @@ def promote_semantic_annotations(
 ) -> SemanticAnnotationPromotionManifest:
     """Promote completed annotations, preserving group metadata outside gold cases."""
     queue_manifest_path = queue_dir / QUEUE_MANIFEST_FILE
-    queue_manifest = _load_queue_manifest(queue_manifest_path)
-    tasks_path = _queue_output_path(queue_dir, queue_manifest, "tasks")
-    schema_path = _queue_output_path(queue_dir, queue_manifest, "submission_schema")
-    if _sha256_file(tasks_path) != queue_manifest.tasks_sha256:
-        raise SemanticAnnotationError("Annotation tasks do not match queue-manifest.json")
-    if _sha256_file(schema_path) != queue_manifest.submission_schema_sha256:
-        raise SemanticAnnotationError("Submission schema does not match queue-manifest.json")
-    tasks = load_semantic_annotation_tasks(tasks_path)
-    _validate_queue_contents(tasks, queue_manifest)
+    queue_manifest, tasks = load_semantic_annotation_queue(queue_dir)
     decisions = load_semantic_annotation_decisions(decisions_path)
     catalogue_revision = catalog.manifest.resolved_revision
     _validate_catalogue_revisions(tasks, decisions, catalogue_revision)

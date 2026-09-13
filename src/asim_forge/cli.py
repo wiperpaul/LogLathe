@@ -10,6 +10,7 @@ from .benchmarking import BenchmarkError
 from .catalog import sync_catalog
 from .commands.evaluation import register_evaluation_parser, run_evaluation_command
 from .commands.reference import register_reference_parser, run_reference_command
+from .commands.review import register_review_parser, run_review_command
 from .compiler import compile_reviews
 from .evaluation import EvaluationError
 from .ingestion import InputError
@@ -43,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Canonical review JSONL or a Potato user_state.json",
     )
     compile_parser.add_argument("--output", type=Path, default=Path("artifacts/compiled"))
+    compile_parser.add_argument(
+        "--mapping-bundle",
+        type=Path,
+        help="Frozen assisted-review bundle when compiling Potato mapping decisions",
+    )
 
     catalog = subparsers.add_parser(
         "catalog",
@@ -62,6 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     register_evaluation_parser(subparsers)
     register_reference_parser(subparsers)
+    register_review_parser(subparsers)
     return parser
 
 
@@ -84,7 +91,9 @@ def main(argv: Sequence[str] | None = None) -> None:
                 f"in {args.output}"
             )
         elif args.command == "compile":
-            compile_manifest = compile_reviews(args.clusters, args.reviews, args.output)
+            compile_manifest = compile_reviews(
+                args.clusters, args.reviews, args.output, mapping_bundle=args.mapping_bundle
+            )
             message = (
                 f"Compiled {compile_manifest.compiled_count} approved parser(s) in {args.output}"
             )
@@ -104,6 +113,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
         elif args.command == "reference":
             run_reference_command(args)
+        elif args.command == "review":
+            run_review_command(args)
         else:
             run_evaluation_command(args)
     except (

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 AsimSchema = Literal["Authentication", "NetworkSession", "AuditEvent"]
 ReviewStatus = Literal["approved", "rejected", "needs_split", "insufficient_evidence"]
 Transform = Literal["string", "int", "long", "real", "datetime", "bool"]
+MappingReviewStatus = Literal["in_progress", "approved", "deferred", "needs_extraction"]
+TimeGeneratedMode = Literal["map", "source", "ingestion"]
 
 
 class StrictModel(BaseModel):
@@ -76,9 +79,36 @@ class ReviewTask(StrictModel):
 
 
 class FieldMapping(StrictModel):
-    slot_id: str = Field(pattern=r"^p[1-9][0-9]*$")
+    slot_id: str | None = Field(default=None, pattern=r"^p[1-9][0-9]*$")
+    source_field: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    constant_value: str | int | float | bool | None = None
     asim_field: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     transform: Transform = "string"
+
+    @model_validator(mode="after")
+    def exactly_one_source(self) -> FieldMapping:
+        if (
+            sum(
+                value is not None
+                for value in (self.slot_id, self.source_field, self.constant_value)
+            )
+            != 1
+        ):
+            raise ValueError("A mapping requires exactly one slot, source field, or constant")
+        if isinstance(self.constant_value, float) and not math.isfinite(self.constant_value):
+            raise ValueError("Mapping constants must be finite")
+        return self
+
+
+class MappingReviewProvenance(StrictModel):
+    mode: Literal["assisted-engineering"] = "assisted-engineering"
+    status: MappingReviewStatus
+    task_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    cluster_file_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    catalogue_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+    review_file_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    time_generated: TimeGeneratedMode = "map"
 
 
 class ReviewDecision(StrictModel):
@@ -86,6 +116,7 @@ class ReviewDecision(StrictModel):
     reviewer: str = Field(min_length=1)
     status: ReviewStatus
     schema_name: AsimSchema | None = None
+    schema_version: str | None = Field(default=None, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     parser_name: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     vendor: str | None = None
     product: str | None = None
@@ -93,6 +124,7 @@ class ReviewDecision(StrictModel):
     message_field: str = Field(default="SyslogMessage", pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     field_mappings: list[FieldMapping] = Field(default_factory=list)
     notes: str = ""
+    mapping_review: MappingReviewProvenance | None = None
 
     @field_validator("schema_name", "parser_name", "vendor", "product")
     @classmethod
@@ -114,11 +146,13 @@ class ParserSpecification(StrictModel):
     parser_name: str
     cluster_id: str
     schema_name: AsimSchema
+    schema_version: str | None = Field(default=None, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     template: str
     source: ParserSource
     field_mappings: list[FieldMapping]
     reviewer: str
     review_notes: str = ""
+    mapping_review: MappingReviewProvenance | None = None
 
 
 class InputFile(StrictModel):

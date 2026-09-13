@@ -3,7 +3,7 @@
 Status: current
 Audience: contributors, integrators, and reviewers of architectural changes
 Canonical for: pipeline boundaries, ownership, and design invariants
-Last verified: 2026-09-10
+Last verified: 2026-09-11
 
 LogLathe is a human-in-the-loop workbench for turning security-log evidence into
 reviewable normalization candidates. Its installed Python distribution and command
@@ -30,8 +30,10 @@ independent cluster review       source-concept schema ranking
       |                           selection or abstention)
       |
       +-- rejected / split / insufficient evidence --> no parser
-      +-- approved but not mapped ------------------> awaiting_mapping
-      +-- approved with complete mapping ----------> parser spec + KQL candidate
+      +-- approved --> frozen source queue --> assisted mapping review in Potato
+                                                   |
+                               draft / defer / extraction needed --> no parser
+                               explicitly approved mapping --> parser spec + KQL
 ```
 
 Semantic evaluation is a separate path:
@@ -70,6 +72,48 @@ are applied explicitly by the evaluation harness and are recorded in the report.
   does not silently validate it in Sentinel or deploy it.
 - **Provenance is part of every boundary.** Input, DeepParse, catalogue, approach,
   case, decision, and output revisions are recorded where they apply.
+
+## Assisted mapping review
+
+`mapping_review.py` consumes the existing verified annotation queue and registered
+mapping approaches. Each immutable task binds source evidence, catalogue,
+prediction, and optional native reference output. Reference answers are joined
+after prediction and stay outside `MappingRequest`.
+
+Source metadata comes from queue setup and is read-only during review. Mapping
+setup pins available schema versions and the `TimeGenerated` policy. One confirmed
+schema applies to the entire template; a schema change requires confirmation again.
+Required target fields are prefilled with blank sources or values. Approval and
+compilation reject missing or blank mandatory and applicable conditional mappings.
+The draft's `schema_rows` cache preserves edits when switching schemas; only its
+active `rows` participate in validation and compilation.
+Setup supplies `EventSchemaVersion` to the compiler. Platform-supplied fields and
+explicit ingestion assumptions appear separately from missing mappings, without
+weakening the native output conformance checks.
+
+`potato_bundle.py` renders the same source evidence for both review stages. The
+mapping task uses Potato's supported task-layout extension and one structured text
+annotation; Potato owns identity, navigation, saving, and resume. Editable draft
+records are distinct from immutable predictions. Only explicit mapping approval
+allows the existing compiler to generate a candidate. Edits return an approval to
+draft, and mismatched evidence revisions are rejected during compilation.
+
+The mapping item exposes cluster, schema, and field review as revisitable tabs,
+showing one panel at a time.
+Its draft can revise cluster coherence using the existing `ReviewStatus` values;
+the adapter carries that decision into the existing `ReviewDecision.status` gate.
+Split, rejected, and insufficient-evidence items cannot compile, even if their
+saved mapping status still says approved. Mapping edits are retained for repair.
+Older drafts inherit the frozen queue's approved cluster status. The original
+source-review snapshot stays separate, and these later assisted revisions do not
+become blinded annotation input. Rebuilding or splitting actual cluster evidence
+still requires a new queue and review revision.
+
+The existing `FieldMapping` contract accepts exactly one source: a parameter slot,
+a source-table column, or a scalar constant, followed by a supported conversion.
+Legacy slot mappings remain readable. Compiler output retains the assisted review's
+task, catalogue, cluster, and saved-state provenance. These engineering decisions
+do not enter the independent-label promotion workflow.
 
 ## Schema-ranking boundary
 
@@ -122,6 +166,8 @@ and must not be compared as though the tasks had identical granularity.
 | `semantic_annotation/` | Blinded queue creation, typed decisions, integrity, and promotion |
 | `catalog.py` | Commit-pinned Microsoft ASIM field catalogue |
 | `reviews.py` | Canonical and Potato cluster-decision readers |
+| `mapping_review.py` | Assisted mapping task preparation, draft validation, and adaptation to the existing compiler |
+| `potato_bundle.py` | Shared source evidence and Potato task configurations/layouts |
 | `compiler.py` | Deterministic parser-specification and KQL candidate generation |
 | `benchmarking.py` | Evidence-separated corpus execution and reporting |
 | `reference/` | Pinned source-table fixtures, native Kusto captures, and output comparison; reuses the build and Potato workflow |
