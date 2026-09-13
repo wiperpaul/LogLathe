@@ -333,6 +333,11 @@ so it counts as derived corpus content. Keep a standalone comparison JSON local
 unless the input's terms permit publishing its per-case predictions and evidence.
 Downloads and generated results remain under ignored `artifacts/`; downstream
 users remain responsible for the terms recorded in each manifest.
+The benchmark reuses local downloads by SHA-256 when its `--cache` directory is
+retained. GitHub-hosted CI starts with a fresh runner; its workflow restores and
+saves only the blobs whose corpus manifests permit `content` redistribution.
+Other remote resources are fetched on each run. All restored bytes are verified
+against their manifest digests, and transient HTTP failures receive bounded retries.
 
 ## Automation and release policy
 

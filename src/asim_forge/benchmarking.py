@@ -11,7 +11,9 @@ import tempfile
 from collections import Counter
 from math import comb
 from pathlib import Path
+from time import sleep
 from typing import Literal
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from pydantic import Field, model_validator
@@ -809,11 +811,18 @@ def _fetch_verified(resource: CorpusResource, cache_dir: Path) -> bytes:
         content = path.read_bytes()
     else:
         request = Request(resource.url, headers={"User-Agent": "ASIM-Forge-Benchmark/1"})
-        try:
-            with urlopen(request, timeout=60) as response:  # noqa: S310
-                content = response.read()
-        except OSError as error:
-            raise BenchmarkError(f"Could not retrieve {resource.url}: {error}") from error
+        for attempt in range(3):
+            try:
+                with urlopen(request, timeout=60) as response:  # noqa: S310
+                    content = response.read()
+                break
+            except HTTPError as error:
+                if error.code not in {429, 500, 502, 503, 504} or attempt == 2:
+                    raise BenchmarkError(f"Could not retrieve {resource.url}: {error}") from error
+            except OSError as error:
+                if attempt == 2:
+                    raise BenchmarkError(f"Could not retrieve {resource.url}: {error}") from error
+            sleep(2**attempt)
     actual = hashlib.sha256(content).hexdigest()
     if actual != resource.sha256:
         raise BenchmarkError(

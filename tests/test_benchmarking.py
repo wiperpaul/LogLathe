@@ -4,8 +4,10 @@ import hashlib
 import io
 import json
 import tarfile
+from email.message import Message
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.error import HTTPError
 
 import pytest
 
@@ -117,6 +119,49 @@ def test_verified_fetch_rejects_poisoned_cache(tmp_path: Path) -> None:
 
     with pytest.raises(BenchmarkError, match="Checksum mismatch"):
         _fetch_verified(resource, tmp_path)
+
+
+def test_verified_fetch_retries_gateway_timeout_then_reuses_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = b"public corpus"
+    resource = CorpusResource(
+        role="input",
+        url="https://invalid.example/corpus",
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+    attempts = 0
+
+    def fetch(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise HTTPError(resource.url, 504, "Gateway Time-out", Message(), None)
+        return io.BytesIO(content)
+
+    monkeypatch.setattr(benchmarking, "urlopen", fetch)
+    monkeypatch.setattr(benchmarking, "sleep", lambda _seconds: None)
+    assert _fetch_verified(resource, tmp_path) == content
+    assert attempts == 2
+    assert _fetch_verified(resource, tmp_path) == content
+    assert attempts == 2
+
+
+def test_verified_fetch_does_not_retry_missing_resource(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    resource = CorpusResource(role="input", url="https://invalid.example/missing", sha256="a" * 64)
+    attempts = 0
+
+    def fetch(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise HTTPError(resource.url, 404, "Not Found", Message(), None)
+
+    monkeypatch.setattr(benchmarking, "urlopen", fetch)
+    with pytest.raises(BenchmarkError, match="HTTP Error 404"):
+        _fetch_verified(resource, tmp_path)
+    assert attempts == 1
 
 
 def test_archive_jsonl_resource_extracts_only_requested_field(tmp_path: Path) -> None:
