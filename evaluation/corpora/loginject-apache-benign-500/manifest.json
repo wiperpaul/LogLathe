@@ -17,10 +17,8 @@
   "resources": [
     {
       "role": "input",
-      "url": "https://zenodo.org/records/20436935/files/loginject_usenix26_artifact_submission_revised_before_upload_tar.gz?download=1",
-      "sha256": "010118d6cfbb03440bb7178d431912a2207f602c9ed546f47667a37d03820a8f",
-      "archive_member": "loginject_usenix26_artifact_submission/artifact/data/benign/apache_access.jsonl",
-      "jsonl_field": "raw_log"
+      "url": "local:input.log",
+      "sha256": "bd7d3cda5eb6225048fefcd5462aefe75e850011c1f78203d7b555e16fb44082"
     }
   ],
   "max_events": 500

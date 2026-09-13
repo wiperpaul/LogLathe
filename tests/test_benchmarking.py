@@ -4,8 +4,10 @@ import hashlib
 import io
 import json
 import tarfile
+from email.message import Message
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.error import HTTPError
 
 import pytest
 
@@ -97,6 +99,28 @@ def test_checked_corpus_registry_has_separate_objective_tracks() -> None:
     assert all(len(fingerprint) == 64 for _, _, fingerprint in loaded)
 
 
+def test_repository_local_benchmark_uses_no_external_corpus_downloads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected_download(*_args, **_kwargs):
+        raise AssertionError("Local-only benchmark attempted a network download")
+
+    monkeypatch.setattr(benchmarking, "urlopen", unexpected_download)
+    report = run_benchmarks(
+        Path("evaluation/corpora"),
+        tmp_path / "output",
+        catalog_dir=Path("evaluation/ci-catalog"),
+        local_only=True,
+    )
+    assert {corpus.corpus_id for corpus in report.corpora} == {
+        "asim-cef-dev",
+        "asim-semantic-smoke",
+        "loginject-apache-benign-500",
+        "loginject-ssh-benign-500",
+    }
+    assert len(report.results) == 16
+
+
 def test_pairwise_parsing_metrics_distinguish_merges_and_splits() -> None:
     metrics = parsing_metrics([1, 1, 1, 2], ["a", "a", "b", "b"])
 
@@ -117,6 +141,71 @@ def test_verified_fetch_rejects_poisoned_cache(tmp_path: Path) -> None:
 
     with pytest.raises(BenchmarkError, match="Checksum mismatch"):
         _fetch_verified(resource, tmp_path)
+
+
+def test_verified_fetch_retries_gateway_timeout_then_reuses_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = b"public corpus"
+    resource = CorpusResource(
+        role="input",
+        url="https://invalid.example/corpus",
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+    attempts = 0
+
+    def fetch(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise HTTPError(resource.url, 504, "Gateway Time-out", Message(), None)
+        return io.BytesIO(content)
+
+    monkeypatch.setattr(benchmarking, "urlopen", fetch)
+    monkeypatch.setattr(benchmarking, "sleep", lambda _seconds: None)
+    assert _fetch_verified(resource, tmp_path) == content
+    assert attempts == 2
+    assert _fetch_verified(resource, tmp_path) == content
+    assert attempts == 2
+
+
+def test_verified_fetch_does_not_retry_missing_resource(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    resource = CorpusResource(role="input", url="https://invalid.example/missing", sha256="a" * 64)
+    attempts = 0
+
+    def fetch(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise HTTPError(resource.url, 404, "Not Found", Message(), None)
+
+    monkeypatch.setattr(benchmarking, "urlopen", fetch)
+    with pytest.raises(BenchmarkError, match="HTTP Error 404"):
+        _fetch_verified(resource, tmp_path)
+    assert attempts == 1
+
+
+def test_local_corpus_resource_is_hash_checked_and_confined_to_manifest(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "manifest"
+    source.mkdir()
+    content = b"first log\n"
+    (source / "input.log").write_bytes(content)
+    resource = CorpusResource(
+        role="input", url="local:input.log", sha256=hashlib.sha256(content).hexdigest()
+    )
+    cache = tmp_path / "cache"
+    assert _fetch_verified(resource, cache, source_dir=source) == content
+    (source / "input.log").write_bytes(b"modified\n")
+    with pytest.raises(BenchmarkError, match="Checksum mismatch"):
+        _fetch_verified(resource, cache, source_dir=source)
+
+    outside = CorpusResource(role="input", url="local:../outside.log", sha256="a" * 64)
+    (tmp_path / "outside.log").write_bytes(b"outside\n")
+    with pytest.raises(BenchmarkError, match="escapes its manifest"):
+        _fetch_verified(outside, cache, source_dir=source)
 
 
 def test_archive_jsonl_resource_extracts_only_requested_field(tmp_path: Path) -> None:

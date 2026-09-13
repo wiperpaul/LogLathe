@@ -3,3 +3,5 @@
 
 # Upstream fixtures and native snapshots have byte-level provenance hashes.
 evaluation/reference/** -text
+evaluation/ci-catalog/asim-catalog.csv -text -eol
+evaluation/ci-catalog/LICENSE.upstream -text -eol

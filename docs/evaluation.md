@@ -308,14 +308,23 @@ primary metric, and corpus fingerprint remain comparable. Editing a manifest,
 local cases, or frozen split evidence changes the fingerprint and suppresses a
 misleading before-and-after value.
 
+For a benchmark using only repository-pinned inputs, add `--local-only` and use
+`--catalog evaluation/ci-catalog`. This selects the two LogInject diagnostic
+fixtures and the local semantic smoke and CEF development corpora. The full command above remains
+available for explicit evaluation of all registered corpora.
+
 ## Reproducibility and redistribution
 
 Every registered corpus has an `evaluation/corpora/<id>/manifest.json`. Remote
 resources use immutable revisions where possible and declare a SHA-256 digest. The
-runner verifies bytes before use, selects one exact archive member rather than
-extracting a tree, and converts LogInject JSONL through only its declared `raw_log`
-field. Local semantic cases, split files, frozen case groups, and promotion
-manifests contribute to the corpus fingerprint.
+runner verifies bytes before use and selects exact archive members where declared.
+Local semantic cases, split files, frozen case groups, and promotion manifests
+contribute to the corpus fingerprint.
+
+The two LogInject benign diagnostic corpora pin the first 500 `raw_log` values from
+the SHA-256-verified Zenodo archive in small, attributed `input.log` fixtures. Their
+resource hashes are checked on each run. The originating archive is not required
+for CI, and no injection or security labels are treated as ASIM ground truth.
 
 The machine-actionable redistribution class controls what may leave the local
 machine:
@@ -333,16 +342,23 @@ so it counts as derived corpus content. Keep a standalone comparison JSON local
 unless the input's terms permit publishing its per-case predictions and evidence.
 Downloads and generated results remain under ignored `artifacts/`; downstream
 users remain responsible for the terms recorded in each manifest.
+The benchmark reuses local downloads by SHA-256 when its `--cache` directory is
+retained. Automatic GitHub CI uses the [pinned catalogue](../evaluation/ci-catalog/README.md)
+and `--local-only`, so benchmark inputs require no external requests. Explicit full
+evaluations restore and save only remote blobs whose manifests permit `content`
+redistribution. Other remote resources are fetched for those explicit runs. All
+restored bytes are verified against their manifest digests, and transient HTTP
+failures receive bounded retries.
 
 ## Automation and release policy
 
-`.github/workflows/evaluation.yml` runs when evaluation definitions, fixtures,
-implementation code, the workflow, or dependency locks change. Pull requests
-retain the generated reports as a workflow artifact but do not publish a release.
-Relevant successful pushes to `main` create an `eval-<run>-<sha>` prerelease; a
-`v*` tag creates its release or attaches the reports to an existing release.
-
-Before evaluation, the workflow tries to download the newest prior `eval-*` JSON
-report for comparable deltas. Failed or partial runs do not reach the release job.
+`.github/workflows/evaluation.yml` runs the four repository-local corpora when
+evaluation definitions, fixtures, implementation code, the workflow, or dependency
+locks change on a pull request or on `main`. It uploads this limited report as a
+workflow artifact and does not publish a release. Run the workflow manually from
+`main` for all registered corpora and an `eval-<run>-<sha>` prerelease, or push a
+`v*` tag for its full evaluation and release. Those explicit full runs may download
+remote sources and try to load the latest prior `eval-*` report for comparable
+deltas. Failed or partial runs do not reach the release job.
 Keep any report cited by a paper, thesis, or release under a stable tag before
 applying a future prerelease-retention policy.

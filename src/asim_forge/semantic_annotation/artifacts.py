@@ -11,6 +11,7 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 
 from .contracts import (
+    QUEUE_MANIFEST_FILE,
     SemanticAnnotationDecision,
     SemanticAnnotationError,
     SemanticAnnotationQueueManifest,
@@ -18,6 +19,22 @@ from .contracts import (
 )
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+
+
+def load_semantic_annotation_queue(
+    queue_dir: Path,
+) -> tuple[SemanticAnnotationQueueManifest, list[SemanticAnnotationTask]]:
+    """Load the existing frozen queue with its task and submission-schema checks."""
+    manifest = _load_queue_manifest(queue_dir / QUEUE_MANIFEST_FILE)
+    tasks_path = _queue_output_path(queue_dir, manifest, "tasks")
+    schema_path = _queue_output_path(queue_dir, manifest, "submission_schema")
+    if _sha256_file(tasks_path) != manifest.tasks_sha256:
+        raise SemanticAnnotationError("Annotation tasks do not match queue-manifest.json")
+    if _sha256_file(schema_path) != manifest.submission_schema_sha256:
+        raise SemanticAnnotationError("Submission schema does not match queue-manifest.json")
+    tasks = load_semantic_annotation_tasks(tasks_path)
+    _validate_queue_contents(tasks, manifest)
+    return manifest, tasks
 
 
 def _load_queue_manifest(path: Path) -> SemanticAnnotationQueueManifest:

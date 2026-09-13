@@ -3,7 +3,7 @@
 Status: active
 Current milestone: 2 — continuous assisted ASIM review
 Canonical for: remaining and deliberately deferred work
-Last reviewed: 2026-09-10
+Last reviewed: 2026-09-11
 
 This roadmap describes what remains to be built. Current behavior and durable
 invariants are documented in [architecture](docs/architecture.md); completed
@@ -53,22 +53,29 @@ inputs, ten controlled variants, native Kusto reference capture/replay, value an
 row comparisons, and bounded catalogue checks. Public samples pass through the
 existing build, Potato review, annotation queue, and reviewed compilation workflow.
 
-The next checkpoint requires a security engineer to review the source clusters.
-Then prepare the existing annotation queue for approved clusters, resolve
-reference/candidate disagreements, and turn reviewed findings into regression
-fixtures. Expand to two additional source families after that first loop. This
-pulls a bounded slice of milestone 3 forward; it does not complete the continuous
-mapping-review UI.
+The source-cluster review is complete for the first local pilot. Assisted mapping
+review now runs in Potato with editable suggestions, the original notes, and
+optional native before/after evidence. Explicit approvals feed the existing
+compiler; drafts, deferrals, and extraction gaps remain uncompiled. The mapping
+item now has Cluster / Schema / Mappings tabs, prefilled required targets, a compact
+mapping list, and one active editor. Schema changes preserve separate drafts.
+Revised split/reject/more-evidence cluster decisions block compilation
+while retaining edits. The original cluster-review snapshot remains preserved.
+
+The next checkpoint is a security engineer's review of one or two useful mapping
+disagreements or extraction gaps. Turn those findings into regression fixtures and
+compare a reviewed candidate against native reference output. Expand to two
+additional source families after that first loop. Automatic transition between
+the initial cluster and mapping tasks, arbitrary text-span correction linked to
+extraction, specialist assignment, and inline parser validation remain outstanding.
 
 ### Source onboarding and preparation
 
 - Introduce a source-onboarding record for vendor, product, source table, message
   field, format, and collection context.
-- Prepare ranked schema and field suggestions before review, recording approach
-  identity, confidence, evidence, and unresolved warnings.
-- Identify mandatory and recommended ASIM fields that cannot yet be populated.
-- Keep suggestions immutable; accepting or editing one creates a separate decision
-  record rather than overwriting provider output.
+- Extend the current required-field guidance to recommended fields and richer
+  source-context coverage. Suggestions and catalogue snapshots are already frozen
+  separately from editable Potato decisions.
 
 ### Progressive review experience
 

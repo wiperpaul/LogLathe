@@ -51,6 +51,9 @@ Issues = "https://github.com/wiperpaul/LogLathe/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+asim_forge = ["mapping_review.html"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

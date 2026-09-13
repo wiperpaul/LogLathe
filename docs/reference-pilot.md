@@ -3,7 +3,7 @@
 Status: current
 Audience: the first reviewer and parser developers
 Canonical for: public reference fixtures and native parser execution
-Last verified: 2026-09-10
+Last verified: 2026-09-11
 
 The first pilot uses 20 public OpenSSH source-table rows and ten explicit controlled
 variants. The upstream parser and its three helpers are pinned to Azure-Sentinel
@@ -60,11 +60,48 @@ below:
 uv run asim-forge evaluation queue artifacts/reference-pilot/openssh/build artifacts/reference-pilot/openssh/build/potato/annotation_output/<reviewer>/user_state.json --catalog artifacts/asim-catalog --group-id openbsd-openssh --group-strategy source-family --vendor OpenBSD --product OpenSSH --source-table Syslog --message-field SyslogMessage --output artifacts/reference-pilot/openssh/annotation
 ```
 
-The [dataset-curation workflow](dataset-curation.md) owns semantic decisions,
-promotion, and grouped evaluation. Its tasks remain blinded to predictions and
-reference answers. The continuous mapping-review UI is still planned; this pilot
-does not replace it with another interface. For the first session, pause after
-cluster review so its findings can guide that work.
+The queue preserves the approved source evidence. Its tasks remain blinded to
+predictions and reference answers. The [dataset-curation workflow](dataset-curation.md)
+owns independent semantic decisions, promotion, and grouped evaluation.
+
+## Review mappings against native reference output
+
+Use the same queue for assisted engineering review in Potato. Attach the checked
+native output and the prepared public fixture to make the before/after values
+available beside the mapping controls:
+
+```console
+uv run asim-forge review prepare artifacts/reference-pilot/openssh/annotation --catalog artifacts/asim-catalog --setup examples/review-setup/openssh.json --cluster-reviews artifacts/reference-pilot/openssh/build/potato/annotation_output/<reviewer>/user_state.json --reference-fixture evaluation/reference/openssh --reference-bundle artifacts/reference-pilot/openssh --reference-capture evaluation/reference/openssh/reference-output.json --output artifacts/reference-pilot/openssh/mapping
+uv run potato start artifacts/reference-pilot/openssh/mapping/potato/config.yaml -p 8000
+```
+
+Stop the earlier Potato task before reusing its port. Continue at
+`http://localhost:8000`; the [mapping-review guide](operator-workflow.md#review-asim-mappings-in-potato)
+describes editing, saving, deferral, and approval. Start with one or two concrete
+disagreements. There is no need to repeat cluster approval or finish every mapping
+before compiling a candidate.
+
+The [example setup](../examples/review-setup/openssh.json) uses the Authentication
+version `0.1.3` recorded by the pinned OpenSSH parser. It also makes AuditEvent
+`0.1.2` and NetworkSession `0.2.7` available for schema assessment, as documented in
+the [AuditEvent](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-audit)
+and [Network Session](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-network)
+references. The source already includes a datetime `TimeGenerated`, so the setup
+uses `source`. Versions are frozen into the review task; they are never inferred
+from the catalogue commit number or entered by the reviewer. Without `--setup`, an
+attached reference enables only its declared schema/version and retains the default
+`map` timestamp policy.
+
+Tasks with cluster notes appear first. Reference examples are joined by their
+original source row and checked against the exact reviewed message and build.
+Reference output stays separate from suggestions, and upstream catalogue findings
+remain visible. The reviewer can disagree with either the mapper or the reference.
+If a value needs new extraction, record that gap instead of entering one example's
+value as a constant intended to generalize.
+
+The checked capture works offline. A new native Kusto execution is needed only
+after you compile a candidate and want to compare its behavior. Mapping approval
+does not supply independent evaluation labels or certify parser correctness.
 
 ## Integration boundaries
 
@@ -72,6 +109,7 @@ cluster review so its findings can guide that work.
 | --- | --- |
 | Log ingestion, DeepParse clustering, schema ranking, Potato task creation | Existing `build_review_bundle` |
 | Cluster decisions | Existing Potato task and `load_review_decisions` |
+| Assisted mapping decisions | `review prepare`, a Potato task layout, and existing `compile --mapping-bundle` |
 | Semantic annotation, provenance, promotion, grouped splits | Existing `evaluation queue`, `promote`, and `validate` |
 | Mapping approaches, metrics, and semantic perturbations | Existing `evaluation compare`, controlled track, and corpus benchmarks |
 | Candidate generation | Existing `compile` with a complete approved mapping |

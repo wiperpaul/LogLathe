@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .models import ReviewDecision
+from .models import FieldMapping, ReviewDecision
 
 
 class ReviewError(ValueError):
@@ -93,6 +93,24 @@ def _load_potato_state(data: dict[str, Any]) -> list[ReviewDecision]:
     return decisions
 
 
+def load_potato_annotations(path: Path) -> tuple[str, dict[str, dict[str, Any]]]:
+    """Read Potato's stored values for task-specific engineering review adapters."""
+    data = json.loads(path.read_bytes())
+    if not isinstance(data, dict) or not isinstance(
+        data.get("instance_id_to_label_to_value"), dict
+    ):
+        raise ReviewError("Expected a Potato user_state.json with annotation values")
+    reviewer = data.get("user_id")
+    if not isinstance(reviewer, str) or not reviewer.strip():
+        raise ReviewError("Potato mapping review must identify its reviewer")
+    annotations = {}
+    for case_id, raw in data["instance_id_to_label_to_value"].items():
+        normalized = _normalize_potato_values(raw)
+        if normalized is not None:
+            annotations[str(case_id)] = normalized
+    return reviewer, annotations
+
+
 def _normalize_potato_values(value: Any) -> dict[str, Any] | None:
     if isinstance(value, dict):
         return value
@@ -127,12 +145,10 @@ def _parser_spec_is_complete(spec: dict[str, Any]) -> bool:
     if not isinstance(mappings, list):
         return False
     for mapping in mappings:
-        if not isinstance(mapping, dict):
+        try:
+            FieldMapping.model_validate(mapping)
+        except ValidationError:
             return False
-        for key in ("slot_id", "asim_field", "transform"):
-            value = mapping.get(key)
-            if not isinstance(value, str) or not value.strip():
-                return False
     return True
 
 

@@ -1,0 +1,25 @@
+{
+  "content_sha256": "ece4acacb6fc8f59b27e7cded83a0aae162de98c3174365137ead7e3ac980d40",
+  "field_count": 1715,
+  "format_version": "1",
+  "requested_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "resolved_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_count": 13,
+  "schemas": [
+    "AgentEvent",
+    "AlertEvent",
+    "AssetEntity",
+    "AuditEvent",
+    "Authentication",
+    "DhcpEvent",
+    "Dns",
+    "FileEvent",
+    "NetworkSession",
+    "ProcessEvent",
+    "RegistryEvent",
+    "UserManagement",
+    "WebSession"
+  ],
+  "source_path": "ASIM/dev/ASimTester/ASimTester.csv",
+  "source_repository": "https://github.com/Azure/Azure-Sentinel"
+}

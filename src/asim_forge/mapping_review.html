@@ -1,0 +1,615 @@
+<!-- Potato task-layout fragment. Potato owns navigation, identity, and persistence. -->
+<form id="mapping_review" class="annotation-form" action="javascript:void(0)"
+      data-annotation-type="text" data-annotation-id="0" data-schema-name="mapping_review" hidden>
+  <textarea id="mapping_review:::text_box" name="mapping_review:::text_box"
+            class="annotation-input" schema="mapping_review" label_name="text_box"
+            validation="[]"></textarea>
+</form>
+
+<section id="ll-mapping" aria-label="ASIM mapping review">
+  <div class="ll-heading">
+    <div><h2>Review this template</h2></div>
+    <strong id="ll-status" role="status">Draft</strong>
+  </div>
+  <p id="ll-error" role="alert" hidden></p>
+  <dl id="ll-context" class="ll-metadata" aria-label="Source setup"></dl>
+  <section class="ll-source-preview" aria-label="Source evidence for this template">
+    <p id="ll-template-caption" class="ll-caption">Template</p>
+    <div id="ll-template" class="ll-template"></div>
+    <div id="ll-example-controls"></div>
+    <pre id="ll-example" class="ll-example"></pre>
+  </section>
+  <div class="ll-tabs" role="tablist" aria-label="Review stages">
+    <button id="ll-tab-cluster" type="button" role="tab" aria-controls="ll-cluster-step" aria-selected="false" tabindex="-1">Cluster<small id="ll-cluster-summary">Approved</small></button>
+    <button id="ll-tab-schema" type="button" role="tab" aria-controls="ll-schema-step" aria-selected="true">Schema<small id="ll-schema-summary">Confirm schema</small></button>
+    <button id="ll-tab-mappings" type="button" role="tab" aria-controls="ll-mappings-step" aria-selected="false" tabindex="-1">Mappings<small id="ll-mappings-summary">Confirm schema first</small></button>
+  </div>
+  <section id="ll-cluster-step" role="tabpanel" aria-labelledby="ll-tab-cluster" tabindex="0" hidden>
+    <p id="ll-note" class="ll-note" hidden></p>
+    <p>The source review approved this cluster. Reassess its examples or mark it as needing a split here.</p>
+    <div id="ll-cluster-controls" class="ll-metadata"></div>
+    <div id="ll-cluster-block" class="ll-note" role="status" hidden></div>
+    <label class="ll-notes">Cluster review notes
+      <textarea id="ll-cluster-notes" class="ll-control" rows="2" placeholder="Mixed events, malformed records, incorrect boundaries, or reasons for changing the decision"></textarea>
+    </label>
+    <div id="ll-source-evidence"></div>
+    <button id="ll-cluster-next" type="button" class="btn btn-primary">Continue to schema</button>
+  </section>
+  <section id="ll-schema-step" role="tabpanel" aria-labelledby="ll-tab-schema" tabindex="0">
+    <p>Choose one schema for this template. Mixed event types need a cluster split.</p>
+    <div id="ll-schema-controls" class="ll-metadata"></div>
+    <p id="ll-schema-version"></p>
+  <details class="ll-details"><summary>Suggestion evidence and ranking</summary><div id="ll-suggestions"></div></details>
+    <button id="ll-confirm-schema" type="button" class="btn btn-primary">Confirm schema and review fields</button>
+    <p id="ll-schema-status" role="status"></p>
+  </section>
+  <section id="ll-mappings-step" role="tabpanel" aria-labelledby="ll-tab-mappings" tabindex="0" hidden>
+  <details id="ll-managed-step" class="ll-details">
+    <summary id="ll-managed-summary">Automatically supplied fields</summary>
+    <div id="ll-managed" class="ll-supplied"></div>
+  </details>
+  <div id="ll-warnings" class="ll-note" role="note"></div>
+  <fieldset id="ll-field-editor" disabled>
+  <div class="ll-workspace">
+    <section aria-label="Mappings">
+      <div class="ll-list-heading"><span>ASIM field</span><span>Source / value</span></div>
+      <div id="ll-mapping-list" class="ll-mapping-list"></div>
+      <button id="ll-add" type="button" class="btn btn-secondary">Add a mapping</button>
+    </section>
+    <section class="ll-editor" aria-label="Selected mapping"><div id="ll-rows"></div></section>
+  </div>
+  <details class="ll-details"><summary>Parser settings</summary><div id="ll-metadata" class="ll-metadata"></div></details>
+  </fieldset>
+  <datalist id="ll-sources"></datalist>
+  <details id="ll-reference" class="ll-details" hidden>
+    <summary>Reference output and source-table context</summary>
+    <p>The pinned parser produced these values. They are evidence to check, not approved labels.</p>
+    <div id="ll-reference-content"></div>
+  </details>
+  <label class="ll-notes">Review notes
+    <textarea id="ll-notes" class="ll-control" rows="3" placeholder="Missing extraction, incorrect meaning, uncertainty, or reasons for deferral"></textarea>
+  </label>
+  <div class="ll-actions">
+    <button id="ll-approve" type="button" class="btn btn-primary">Approve mapping</button>
+    <button id="ll-extraction" type="button" class="btn btn-secondary">Needs extraction work</button>
+    <button id="ll-defer" type="button" class="btn btn-secondary">Defer</button>
+    <button id="ll-draft" type="button" class="btn btn-secondary">Keep as draft</button>
+  </div>
+  <p class="ll-caption">Use Potato's next button to continue. Approval applies to these mappings; parser validation follows separately.</p>
+  </section>
+</section>
+
+<style>
+#ll-mapping { font: inherit; line-height: 1.5; }
+#ll-mapping h2 { margin: 0; font-size: 1.25rem; }
+#ll-mapping h3 { font-size: 1.05rem; margin: 1.2rem 0 .5rem; }
+#ll-field-editor { border: 0; padding: 0; margin: 0; min-width: 0; }
+#ll-field-editor:disabled { opacity: .6; }
+#ll-context dt { font-size: .8rem; opacity: .75; }
+#ll-context dd { margin: .2rem 0; overflow-wrap: anywhere; }
+#ll-mapping [hidden] { display: none !important; }
+#ll-context { grid-template-columns: repeat(4, minmax(0, 1fr)); font-size: .85rem; }
+.ll-tabs { display: flex; border-bottom: 1px solid var(--border, #d4d4d8); gap: .4rem; margin: 1rem 0; }
+.ll-tabs [role="tab"] { flex: 1; padding: .6rem .4rem; border: 0; border-bottom: 3px solid transparent; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.ll-tabs [role="tab"][aria-selected="true"] { border-bottom-color: var(--ring, #6e56cf); background: var(--secondary, #f4f4f5); }
+.ll-tabs [role="tab"]:disabled { opacity: .5; cursor: default; }
+.ll-tabs small { display: block; font-size: .73rem; font-weight: 400; }
+.ll-tabs [role="tab"]:focus-visible { outline: 2px solid var(--ring, #6e56cf); outline-offset: -2px; }
+.ll-required { color: #9a3412; font-size: .75rem; }
+.ll-required-input { border-color: #b45309; }
+#ll-mapping p { margin: .35rem 0 .8rem; }
+.ll-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+#ll-status { white-space: nowrap; border: 1px solid currentColor; padding: .15rem .6rem; border-radius: 1rem; }
+.ll-metadata { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: .8rem; margin: 1rem 0; }
+.ll-control { width: 100%; min-width: 0; border: 1px solid var(--border, #a1a1aa); border-radius: 5px; padding: .4rem .5rem; color: inherit; background: var(--card, white); font: inherit; }
+.ll-control:focus { outline: 2px solid var(--ring, #6e56cf); outline-offset: 1px; }
+.ll-workspace { display: grid; grid-template-columns: minmax(190px, .9fr) minmax(240px, 1.1fr); gap: 1.1rem; align-items: start; }
+.ll-list-heading, .ll-mapping-choice { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+.ll-list-heading { font-size: .8rem; font-weight: 600; padding: .5rem; }
+.ll-mapping-list { max-height: 26rem; overflow-y: auto; margin-bottom: .8rem; }
+.ll-mapping-choice { width: 100%; padding: .65rem .5rem; border: 0; border-bottom: 1px solid var(--border, #d4d4d8); text-align: left; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: .85rem; overflow-wrap: anywhere; }
+.ll-mapping-choice[aria-pressed="true"] { background: var(--secondary, #f4f4f5); box-shadow: inset 3px 0 var(--ring, #6e56cf); }
+.ll-mapping-choice small { display: block; opacity: .75; }
+.ll-editor { border: 1px solid var(--border, #d4d4d8); border-radius: 6px; padding: 1rem; min-width: 0; }
+.ll-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; align-items: start; }
+.ll-row > label:first-child, .ll-row > label:nth-child(2) { grid-column: 1 / -1; }
+.ll-source-preview { border: 1px solid var(--border, #d4d4d8); border-radius: 6px; padding: .8rem; margin: .8rem 0; }
+.ll-template { font-family: ui-monospace, monospace; font-size: .85rem; overflow-wrap: anywhere; line-height: 2.2; }
+.ll-slot { font: inherit; padding: .1rem .35rem; border: 1px solid var(--border, #a1a1aa); border-radius: 4px; cursor: pointer; color: inherit; background: var(--secondary, #f4f4f5); }
+.ll-slot[aria-pressed="true"] { outline: 2px solid var(--ring, #6e56cf); }
+.ll-example { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .83rem; margin: .6rem 0 0; max-height: 10rem; overflow-y: auto; }
+#ll-example-controls { margin-top: .6rem; font-size: .8rem; }
+.ll-row label, .ll-metadata label { display: flex; flex-direction: column; gap: .3rem; font-size: .88rem; font-weight: 500; }
+.ll-source { display: flex; flex-direction: column; gap: .4rem; }
+.ll-value, .ll-caption { font-size: .83rem; opacity: .85; overflow-wrap: anywhere; }
+.ll-value { white-space: pre-wrap; }
+.ll-remove { grid-column: 1 / -1; justify-self: start; border: 0; background: transparent; color: inherit; cursor: pointer; font-size: .85rem; padding: 0; text-decoration: underline; }
+.ll-note { padding: .7rem; margin: .7rem 0; background: var(--secondary, #f4f4f5); border-left: 3px solid var(--ring, #6e56cf); border-radius: 4px; }
+.ll-supplied { margin: .8rem 0; overflow-x: auto; }
+.ll-supplied table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.ll-supplied caption { caption-side: top; text-align: left; color: inherit; font-weight: 600; padding: 0 0 .5rem; }
+.ll-supplied th, .ll-supplied td { text-align: left; border-bottom: 1px solid var(--border, #d4d4d8); padding: .45rem .6rem; vertical-align: top; overflow-wrap: anywhere; }
+.ll-supplied thead { background: var(--secondary, #f4f4f5); }
+.ll-supplied tbody th { font-weight: 500; }
+.ll-supplied td:last-child { color: var(--muted-foreground, #52525b); }
+.ll-details { margin: .9rem 0; }
+.ll-details summary { cursor: pointer; font-weight: 600; }
+.ll-details table { width: 100%; margin: .5rem 0 1rem; border-collapse: collapse; font-size: .85rem; }
+.ll-details td, .ll-details th { text-align: left; border-bottom: 1px solid var(--border, #d4d4d8); padding: .4rem; overflow-wrap: anywhere; }
+.ll-details ul { padding-left: 1.25rem; }
+.ll-notes { display: block; margin-top: 1rem; font-weight: 500; }
+.ll-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .8rem; }
+#ll-error { color: #b91c1c; font-weight: 600; }
+@media (max-width: 700px) { #ll-context { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ll-workspace { grid-template-columns: minmax(0, 1fr); } .ll-mapping-list { max-height: 13rem; } }
+</style>
+
+<script>
+(function () {
+  'use strict';
+  function initialise() {
+    const root = document.getElementById('ll-mapping');
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = 'true';
+    const storage = document.getElementById('mapping_review:::text_box');
+    const recordElement = document.querySelector('[data-instance-json]');
+    const record = recordElement ? JSON.parse(recordElement.dataset.instanceJson) : {};
+    const task = record.mapping_task;
+    const error = document.getElementById('ll-error');
+    function fail(message) { error.textContent = message; error.hidden = false; }
+    if (!task || !record.initial_draft) { fail('The mapping task could not be loaded. Please reopen this Potato task.'); return; }
+    let draft;
+    try { draft = storage.value.trim() ? JSON.parse(storage.value) : structuredClone(record.initial_draft); }
+    catch (_) { fail('Saved mapping data could not be read. Please retain this task for recovery.'); return; }
+    if (draft.review_revision !== task.review_revision || draft.mode !== 'assisted-engineering') {
+      fail('This saved decision belongs to different evidence. Prepare a new review before continuing.'); return;
+    }
+    const fieldsBySchema = record.catalogue_fields;
+    const source = task.source_task.input;
+    const reference = task.reference;
+    const setup = task.setup;
+    const configuredSchemas = setup ? Object.keys(setup.schema_versions) : Object.keys(fieldsBySchema);
+    draft.cluster_status = draft.cluster_status || 'approved';
+    draft.cluster_notes = draft.cluster_notes || '';
+    draft.schema_confirmed = draft.schema_confirmed === true;
+    draft.schema_rows = draft.schema_rows || {};
+    let activeRow = 0;
+    let activeStep = draft.cluster_status !== 'approved' ? 'cluster' : draft.schema_confirmed ? 'mappings' : 'schema';
+    if (task.cluster_notes) {
+      const note = document.getElementById('ll-note');
+      note.textContent = 'From cluster review: ' + task.cluster_notes; note.hidden = false;
+    }
+    const slots = new Map(source.parameter_slots.map(slot => [slot.slot_id, slot]));
+    const statusNames = {in_progress: 'Draft', approved: 'Mapping approved', deferred: 'Deferred', needs_extraction: 'Needs extraction'};
+    const clusterNames = {approved: 'Approved', needs_split: 'Needs split', rejected: 'Rejected', insufficient_evidence: 'Needs more evidence'};
+    function element(tag, text, className) {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    }
+    function select(values, value) {
+      const control = element('select', undefined, 'll-control');
+      values.forEach(item => {
+        const pair = Array.isArray(item) ? item : [item, item];
+        const option = element('option', pair[1]); option.value = pair[0]; control.append(option);
+      });
+      control.value = value; return control;
+    }
+    function input(value, list) {
+      const control = element('input', undefined, 'll-control');
+      control.type = 'text'; control.value = value;
+      if (list) control.setAttribute('list', list);
+      return control;
+    }
+    function label(text, control) { const node = element('label', text); node.append(control); return node; }
+    function fieldMap(name = draft.schema_name) { return new Map((fieldsBySchema[name] || []).map(field => [field.name, field])); }
+    function managedFields() {
+      const result = new Map([
+        ['EventSchema', {value: draft.schema_name || 'Choose a schema', origin: 'Schema selection'}],
+        ['EventVendor', {value: source.source_metadata.vendor, origin: 'Source setup'}],
+        ['EventProduct', {value: source.source_metadata.product, origin: 'Source setup'}],
+      ]);
+      if (setup) {
+        result.set('EventSchemaVersion', {value: setup.schema_versions[draft.schema_name] || 'Choose a schema', origin: 'Review setup'});
+        result.set('Type', {value: source.source_metadata.source_table, origin: 'Log Analytics'});
+        if (setup.time_generated === 'source') result.set('TimeGenerated', {value: 'Existing timestamp', origin: 'Source-table column'});
+        if (setup.time_generated === 'ingestion') result.set('TimeGenerated', {value: 'Generated at ingestion', origin: 'Setup assumption'});
+      }
+      return result;
+    }
+    const supportedTypes = ['string', 'int', 'long', 'real', 'datetime', 'bool'];
+    function editableRow(row, name = draft.schema_name) {
+      if (!row.asim_field) return true;
+      const field = fieldMap(name).get(row.asim_field);
+      return field && !managedFields().has(row.asim_field) && supportedTypes.includes(field.kql_type);
+    }
+    function rememberSchema() {
+      if (!configuredSchemas.includes(draft.schema_name)) return;
+      const hidden = (draft.schema_rows[draft.schema_name] || []).filter(row => !editableRow(row));
+      draft.schema_rows[draft.schema_name] = structuredClone([...draft.rows, ...hidden]);
+    }
+    function hasSource(row) { return Boolean((row.source_kind === 'constant' ? row.constant_value : row.locator).trim()); }
+    function requiredFields() {
+      const fields = [...fieldMap().values()];
+      const represented = new Set([...managedFields().keys(), ...draft.rows.map(row => row.asim_field), ...fields.filter(field => field.field_class === 'Mandatory').map(field => field.name)]);
+      return fields.filter(field => !managedFields().has(field.name) && (field.field_class === 'Mandatory' || (field.field_class === 'Conditional' && field.aliased_field && represented.has(field.aliased_field))));
+    }
+    function ensureRequiredRows() {
+      const represented = new Set(draft.rows.map(row => row.asim_field));
+      for (const field of requiredFields()) {
+        if (!represented.has(field.name)) {
+          draft.rows.push({source_kind: 'slot', locator: '', role: '', asim_field: field.name, transform: supportedTypes.includes(field.kql_type) ? field.kql_type : 'string', constant_value: ''});
+        }
+      }
+    }
+    function activateSchema(name) {
+      const previous = draft.schema_name;
+      rememberSchema();
+      const candidates = draft.schema_rows[name] || draft.schema_rows[previous] || draft.rows;
+      draft.schema_name = name;
+      if (configuredSchemas.includes(name) && !draft.schema_rows[name]) draft.schema_rows[name] = structuredClone(candidates);
+      draft.rows = configuredSchemas.includes(name) ? structuredClone(candidates.filter(row => editableRow(row, name))) : [];
+      ensureRequiredRows();
+      activeRow = Math.max(0, draft.rows.findIndex(row => !hasSource(row)));
+    }
+    function store() {
+      rememberSchema();
+      storage.value = JSON.stringify(draft);
+      storage.setAttribute('data-modified', 'true');
+      storage.dispatchEvent(new Event('input', {bubbles: true}));
+      storage.dispatchEvent(new Event('change', {bubbles: true}));
+      document.getElementById('ll-status').textContent = draft.cluster_status === 'approved' ? statusNames[draft.status] : clusterNames[draft.cluster_status];
+    }
+    function changed() {
+      ensureRequiredRows(); draft.status = 'in_progress'; error.hidden = true; store(); warnings(); renderMappingList(); renderTemplate();
+    }
+    function referenceValue(name) {
+      if (!reference) return 'No native reference attached';
+      const values = reference.examples.flatMap(example => example.output.rows.map(row => row[name]));
+      const unique = [...new Set(values.filter(value => value !== undefined && value !== null && value !== '').map(value => typeof value === 'string' ? value : JSON.stringify(value)))];
+      return unique.length ? unique.join('\n') : 'No populated value in these reference rows';
+    }
+    function targetSelect(current) {
+      const control = select([['', 'Choose an ASIM field']], '');
+      const editable = (fieldsBySchema[draft.schema_name] || [])
+        .filter(field => !managedFields().has(field.name) && ['string', 'int', 'long', 'real', 'datetime', 'bool'].includes(field.kql_type))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      for (const category of ['Mandatory', 'Conditional', 'Recommended', 'Optional', 'Alias']) {
+        const fields = editable.filter(field => field.field_class === category);
+        if (!fields.length) continue;
+        const group = element('optgroup'); group.label = category;
+        fields.forEach(field => {
+          const option = element('option', field.name); option.value = field.name;
+          option.disabled = field.name !== current && draft.rows.some(row => row.asim_field === field.name && hasSource(row));
+          group.append(option);
+        });
+        control.append(group);
+      }
+      control.value = current;
+      return control;
+    }
+    const metadata = document.getElementById('ll-metadata');
+    const steps = ['cluster', 'schema', 'mappings'];
+    const tabs = steps.map(step => document.getElementById('ll-tab-' + step));
+    function showStep(step, focus = false) {
+      if (document.getElementById('ll-tab-' + step).disabled) step = draft.cluster_status !== 'approved' ? 'cluster' : 'schema';
+      activeStep = step;
+      document.getElementById('ll-template-caption').textContent = step === 'mappings' ? 'Template — select an extracted slot to review its mapping' : 'Template';
+      steps.forEach((name, index) => {
+        const selected = name === step;
+        document.getElementById('ll-' + name + '-step').hidden = !selected;
+        tabs[index].setAttribute('aria-selected', String(selected)); tabs[index].tabIndex = selected ? 0 : -1;
+      });
+      if (focus) document.getElementById('ll-tab-' + step).focus();
+    }
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => showStep(steps[index]));
+      tab.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault(); event.stopPropagation();
+        const available = tabs.filter(item => !item.disabled);
+        const current = available.indexOf(tab);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? available.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + available.length) % available.length;
+        showStep(steps[tabs.indexOf(available[next])], true);
+      });
+    });
+    const cluster = select(Object.entries(clusterNames), draft.cluster_status);
+    cluster.id = 'll-cluster'; document.getElementById('ll-cluster-controls').append(label('Cluster decision', cluster));
+    cluster.addEventListener('change', () => {
+      draft.cluster_status = cluster.value; draft.schema_confirmed = false; changed(); schemaState(); showStep('cluster');
+    });
+    const clusterNotes = document.getElementById('ll-cluster-notes'); clusterNotes.value = draft.cluster_notes;
+    clusterNotes.addEventListener('input', () => { draft.cluster_notes = clusterNotes.value; changed(); });
+    // Keep Potato's existing source tables, within the revisitable cluster step.
+    const sourceDisplay = document.querySelector('.instance-display-container');
+    if (sourceDisplay) document.getElementById('ll-source-evidence').append(sourceDisplay);
+    document.getElementById('ll-cluster-next').addEventListener('click', () => showStep('schema', true));
+    const schema = select([['', 'Choose a schema'], ...configuredSchemas], draft.schema_name);
+    schema.id = 'll-schema'; document.getElementById('ll-schema-controls').append(label('ASIM schema', schema));
+    function schemaState() {
+      const valid = configuredSchemas.includes(draft.schema_name);
+      const clusterApproved = draft.cluster_status === 'approved';
+      const confirmed = clusterApproved && valid && draft.schema_confirmed;
+      schema.disabled = !clusterApproved;
+      document.getElementById('ll-field-editor').disabled = !confirmed;
+      document.getElementById('ll-approve').disabled = !confirmed;
+      document.getElementById('ll-confirm-schema').disabled = !clusterApproved || !valid;
+      document.getElementById('ll-confirm-schema').textContent = confirmed ? 'Continue to mappings' : 'Confirm schema and review fields';
+      document.getElementById('ll-schema-status').textContent = confirmed ? 'Schema confirmed. Review the fields below.' : 'Assess the suggested schema before reviewing fields.';
+      document.getElementById('ll-schema-version').textContent = setup && valid ? 'EventSchemaVersion: ' + setup.schema_versions[draft.schema_name] + ' — supplied automatically from setup.' : 'A version must be available in setup for the selected schema.';
+      document.getElementById('ll-schema-summary').textContent = (draft.schema_name || 'Choose a schema') + (confirmed ? ' · Confirmed' : ' · Unconfirmed');
+      document.getElementById('ll-cluster-summary').textContent = clusterNames[draft.cluster_status];
+      document.getElementById('ll-tab-schema').disabled = !clusterApproved;
+      document.getElementById('ll-tab-mappings').disabled = !confirmed;
+      document.getElementById('ll-cluster-next').disabled = !clusterApproved;
+      const block = document.getElementById('ll-cluster-block'); block.hidden = clusterApproved;
+      block.textContent = clusterNames[draft.cluster_status] + '. Mapping edits are retained. Resolve the cluster review before continuing; this item cannot compile.';
+      showStep(activeStep);
+      renderTemplate();
+    }
+    schema.addEventListener('change', () => { activateSchema(schema.value); draft.schema_confirmed = false; changed(); renderRows(); schemaState(); });
+    document.getElementById('ll-confirm-schema').addEventListener('click', () => {
+      if (!draft.schema_confirmed) { draft.schema_confirmed = true; changed(); }
+      schemaState(); showStep('mappings', true);
+    });
+    const context = document.getElementById('ll-context');
+    [['vendor', 'Vendor'], ['product', 'Product'], ['source_table', 'Source table'], ['message_field', 'Message field']].forEach(([key, title]) => {
+      const pair = element('div'); pair.append(element('dt', title), element('dd', source.source_metadata[key] || 'Missing from setup')); context.append(pair);
+    });
+    [['parser_name', 'Parser name']].forEach(([key, title]) => {
+      const control = input(draft[key]); control.id = 'll-' + key;
+      control.addEventListener('input', () => { draft[key] = control.value; changed(); }); metadata.append(label(title, control));
+    });
+    const sourceList = document.getElementById('ll-sources');
+    [...new Set([...slots.keys(), ...Object.keys(reference ? reference.source_columns : {}), ...(setup && setup.time_generated !== 'map' ? ['TimeGenerated'] : [])])].forEach(name => {
+      const option = element('option'); option.value = name; sourceList.append(option);
+    });
+    const examples = source.representative_events;
+    const exampleSelect = select(examples.map((event, index) => [String(index), 'Example ' + (index + 1) + ' · ' + event.source_file + ':' + event.line_number]), '0');
+    exampleSelect.setAttribute('aria-label', 'Source example');
+    function showExample() { document.getElementById('ll-example').textContent = examples[Number(exampleSelect.value)]?.text || ''; }
+    exampleSelect.addEventListener('change', showExample);
+    document.getElementById('ll-example-controls').append(exampleSelect); showExample();
+    function activateRow(index) { activeRow = index; renderRows(); }
+    function renderTemplate() {
+      const preview = document.getElementById('ll-template'); preview.replaceChildren();
+      let cursor = 0, slotIndex = 0;
+      for (const match of source.template.matchAll(/<VAR:[A-Za-z0-9_]+>/g)) {
+        preview.append(document.createTextNode(source.template.slice(cursor, match.index)));
+        const slot = source.parameter_slots[slotIndex++];
+        if (slot) {
+          const index = draft.rows.findIndex(row => row.source_kind === 'slot' && row.locator === slot.slot_id);
+          const button = element('button', slot.slot_id + ' · ' + (draft.rows[index]?.asim_field || slot.label), 'll-slot');
+          button.type = 'button'; button.dataset.slot = slot.slot_id;
+          button.title = slot.examples.join(', ') || slot.placeholder;
+          button.setAttribute('aria-pressed', String(index >= 0 && index === activeRow));
+          button.disabled = draft.cluster_status !== 'approved' || !draft.schema_confirmed;
+          button.addEventListener('click', () => {
+            showStep('mappings');
+            if (index >= 0) activateRow(index);
+            else {
+              draft.rows.push({source_kind: 'slot', locator: slot.slot_id, role: '', asim_field: '', transform: 'string', constant_value: ''});
+              activeRow = draft.rows.length - 1; changed(); renderRows();
+            }
+            document.querySelector('#ll-rows [data-key="asim_field"]')?.focus();
+          });
+          preview.append(button);
+        } else preview.append(document.createTextNode(match[0]));
+        cursor = match.index + match[0].length;
+      }
+      preview.append(document.createTextNode(source.template.slice(cursor)));
+    }
+    function renderMappingList() {
+      const list = document.getElementById('ll-mapping-list'); list.replaceChildren();
+      const required = new Set(requiredFields().map(field => field.name));
+      const incomplete = draft.rows.filter(row => required.has(row.asim_field) && !hasSource(row)).length;
+      document.getElementById('ll-mappings-summary').textContent = incomplete ? incomplete + ' required to fill' : draft.rows.length + ' fields';
+      draft.rows.map((row, index) => ({row, index})).sort((a, b) => Number(required.has(b.row.asim_field)) - Number(required.has(a.row.asim_field))).forEach(({row, index}) => {
+        const button = element('button', undefined, 'll-mapping-choice'); button.type = 'button';
+        button.dataset.mappingIndex = String(index); button.setAttribute('aria-pressed', String(index === activeRow));
+        const needsSource = required.has(row.asim_field) && !hasSource(row);
+        const origin = element('span', needsSource ? 'Choose source or value' : row.source_kind === 'constant' ? row.constant_value || '(empty)' : row.locator || 'Choose source');
+        const sample = row.source_kind === 'slot' ? slots.get(row.locator)?.examples[0] : '';
+        origin.append(element('small', sample || {slot: 'Extracted slot', source_field: 'Source-table field', constant: 'Fixed value'}[row.source_kind]));
+        const target = element('span', row.asim_field || 'Choose ASIM field');
+        if (required.has(row.asim_field)) target.append(element('small', needsSource ? 'Required · Needs value' : 'Required', needsSource ? 'll-required' : ''));
+        button.append(target, origin);
+        button.addEventListener('click', () => activateRow(index)); list.append(button);
+      });
+      if (!draft.rows.length) list.append(element('p', 'Select a template slot or add a mapping.', 'll-caption'));
+    }
+    function renderRows() {
+      const rows = document.getElementById('ll-rows'); rows.replaceChildren();
+      activeRow = Math.max(0, Math.min(activeRow, draft.rows.length - 1));
+      renderMappingList(); renderTemplate();
+      if (!draft.rows.length) rows.append(element('p', 'The selected mapping will appear here.', 'll-caption'));
+      draft.rows.forEach((row, index) => {
+        if (index !== activeRow) return;
+        const card = element('div', undefined, 'll-row'); card.dataset.row = String(index);
+        const required = requiredFields().some(field => field.name === row.asim_field);
+        const sourceControls = element('div', undefined, 'll-source');
+        const kind = select([['slot', 'Extracted slot'], ['source_field', 'Source-table field'], ['constant', 'Fixed value']], row.source_kind);
+        kind.dataset.key = 'source_kind';
+        const locator = input(row.source_kind === 'constant' ? row.constant_value : row.locator, row.source_kind === 'constant' ? undefined : 'll-sources');
+        locator.dataset.key = 'source';
+        locator.required = required; locator.placeholder = required ? 'Required — choose a source or enter a value' : 'Source or value';
+        if (required && !hasSource(row)) locator.classList.add('ll-required-input');
+        const sample = element('span', undefined, 'll-value');
+        function sampleValue() {
+          const slot = slots.get(row.locator);
+          sample.textContent = row.source_kind === 'slot' && slot ? slot.examples.join(', ') :
+            row.source_kind === 'source_field' && setup && setup.time_generated === 'ingestion' && row.locator === 'TimeGenerated' ? 'Available after ingestion (setup assumption)' :
+            row.source_kind === 'source_field' && reference ? reference.examples.map(example => String(example.source_values[row.locator] ?? '')).join(', ') : '';
+        }
+        kind.addEventListener('change', () => {
+          row.source_kind = kind.value; changed(); renderRows();
+        });
+        locator.addEventListener('input', () => {
+          if (row.source_kind === 'constant') row.constant_value = locator.value;
+          else row.locator = locator.value;
+          locator.classList.toggle('ll-required-input', required && !hasSource(row)); sampleValue(); changed();
+        });
+        sourceControls.append(kind, locator, sample); sampleValue();
+        card.append(label('Source / value', sourceControls));
+        const target = targetSelect(row.asim_field); target.dataset.key = 'asim_field';
+        target.disabled = required;
+        const conversion = select(['string', 'int', 'long', 'real', 'datetime', 'bool'], row.transform); conversion.dataset.key = 'transform';
+        const actual = element('span', referenceValue(row.asim_field), 'll-value');
+        target.addEventListener('change', () => {
+          row.asim_field = target.value;
+          const field = fieldMap().get(row.asim_field);
+          if (field && ['string', 'int', 'long', 'real', 'datetime', 'bool'].includes(field.kql_type)) {
+            row.transform = field.kql_type; conversion.value = row.transform;
+          }
+          // Assigning a slot to a prefilled required target fills that entry.
+          const existing = draft.rows.findIndex((candidate, other) => other !== index && candidate.asim_field === row.asim_field && !hasSource(candidate));
+          if (existing >= 0) {
+            Object.assign(draft.rows[existing], row);
+            draft.rows.splice(index, 1); activeRow = existing > index ? existing - 1 : existing;
+          }
+          actual.textContent = referenceValue(row.asim_field); changed(); renderRows();
+        });
+        conversion.addEventListener('change', () => { row.transform = conversion.value; changed(); });
+        card.append(label('ASIM field', target), label('Conversion', conversion), label('Reference output', actual));
+        const keepRequired = required && draft.rows.filter(candidate => candidate.asim_field === row.asim_field).length === 1;
+        const remove = element('button', keepRequired ? 'Clear this required value' : 'Remove this mapping', 'll-remove'); remove.type = 'button';
+        remove.addEventListener('click', () => {
+          if (keepRequired) { row.source_kind = 'slot'; row.locator = ''; row.constant_value = ''; row.role = ''; }
+          else draft.rows.splice(index, 1);
+          changed(); renderRows();
+        });
+        card.append(remove); rows.append(card);
+      });
+    }
+    function warnings() {
+      const warnings = [...task.prediction.warnings];
+      const represented = new Set(draft.rows.map(row => row.asim_field));
+      const managed = managedFields();
+      managed.forEach((_, name) => represented.add(name));
+      const supplied = document.getElementById('ll-managed');
+      document.getElementById('ll-managed-summary').textContent = 'Automatically supplied · ' + managed.size + ' fields';
+      const table = element('table'); table.append(element('caption', 'Automatically supplied fields'));
+      const head = element('thead'), heading = element('tr');
+      ['ASIM field', 'Value', 'Provided by'].forEach(title => { const cell = element('th', title); cell.scope = 'col'; heading.append(cell); });
+      head.append(heading); table.append(head);
+      const body = element('tbody');
+      managed.forEach((details, name) => {
+        const row = element('tr'), field = element('th', name); field.scope = 'row';
+        row.append(field, element('td', details.value), element('td', details.origin)); body.append(row);
+      });
+      table.append(body); supplied.replaceChildren(table);
+      if (reference && draft.schema_name && (reference.schema_name !== draft.schema_name || (setup && reference.schema_version !== setup.schema_versions[draft.schema_name]))) warnings.push('Reference output uses ' + reference.schema_name + ' ' + reference.schema_version + '; review targets ' + draft.schema_name + (setup ? ' ' + setup.schema_versions[draft.schema_name] : '') + '.');
+      task.prediction.asim_fields.forEach(mapping => {
+        if (mapping.source_kind !== 'slot' && mapping.constant_value === null && !represented.has(mapping.asim_field)) {
+          warnings.push('Extraction or derivation needed for ' + mapping.locator + ' → ' + mapping.asim_field + '.');
+        }
+      });
+      if (reference && reference.issues.length) warnings.push('The reference parser also has ' + reference.issues.length + ' catalogue findings; inspect them below.');
+      const box = document.getElementById('ll-warnings'); box.replaceChildren(); box.hidden = !warnings.length;
+      warnings.forEach(message => box.append(element('div', message)));
+    }
+    const suggestions = document.getElementById('ll-suggestions');
+    suggestions.append(element('p', 'Approach: ' + task.prediction.approach.name + ' ' + task.prediction.approach.version + '. Ranking scores are not calibrated probabilities.'));
+    const evidenceList = element('ul');
+    task.prediction.ranked_schemas.forEach(item => evidenceList.append(element('li', item.schema_name + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
+    task.prediction.asim_fields.forEach(item => evidenceList.append(element('li', item.locator + ' → ' + item.asim_field + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
+    suggestions.append(evidenceList);
+    const interpretations = element('details');
+    interpretations.append(element('summary', 'Internal source-role evidence'));
+    interpretations.append(element('p', 'These are the mapper’s internal descriptions of what values represent in the event. They are not OCSF fields and do not need editing here. Use review notes to flag an incorrect interpretation.'));
+    const roles = element('ul');
+    task.prediction.source_semantics.forEach(item => roles.append(element('li', item.locator + ': ' + item.role)));
+    interpretations.append(roles); suggestions.append(interpretations);
+    if (reference) {
+      document.getElementById('ll-reference').hidden = false;
+      const content = document.getElementById('ll-reference-content');
+      content.append(element('p', 'Reference: ' + reference.schema_name + ' ' + reference.schema_version));
+      reference.issues.forEach(issue => content.append(element('p', issue.event_id + ' · ' + issue.field + ': ' + issue.detail)));
+      reference.examples.forEach(example => {
+        const section = element('details'); section.append(element('summary', example.event_id));
+        function table(title, values) {
+          section.append(element('h3', title));
+          const grid = element('table'); const body = element('tbody');
+          Object.entries(values).filter(([, value]) => value !== '' && value !== null).forEach(([key, value]) => {
+            const row = element('tr'); row.append(element('th', key), element('td', typeof value === 'string' ? value : JSON.stringify(value))); body.append(row);
+          }); grid.append(body); section.append(grid);
+        }
+        table('Source-table values', example.source_values);
+        example.output.rows.forEach((row, index) => table('Reference row ' + (index + 1), row));
+        if (!example.output.rows.length) section.append(element('p', 'The reference parser emitted no rows.'));
+        content.append(section);
+      });
+    }
+    const notes = document.getElementById('ll-notes'); notes.value = draft.notes;
+    notes.addEventListener('input', () => { draft.notes = notes.value; changed(); });
+    function validate() {
+      if (draft.cluster_status !== 'approved') return 'Resolve the cluster review before approving its mappings.';
+      if (!fieldsBySchema[draft.schema_name]) return 'Choose a supported ASIM schema.';
+      if (!draft.schema_confirmed) return 'Confirm the schema before approving its mappings.';
+      if (setup && !setup.schema_versions[draft.schema_name]) return 'Choose a schema with a version available in setup.';
+      for (const key of ['vendor', 'product', 'source_table', 'message_field', 'parser_name']) {
+        if (!draft[key].trim()) return 'Complete the source metadata and parser name before approving.';
+      }
+      for (const key of ['source_table', 'message_field', 'parser_name']) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(draft[key])) return 'Use a valid identifier for ' + key.replaceAll('_', ' ') + '.';
+      }
+      if (!draft.rows.length) return 'Add at least one mapping, or defer the task.';
+      const required = new Set(requiredFields().map(field => field.name));
+      const missing = draft.rows.findIndex(row => required.has(row.asim_field) && !hasSource(row));
+      if (missing >= 0) {
+        activateRow(missing); document.querySelector('#ll-rows [data-key="source"]')?.focus();
+        return 'Fill the required source or value for ' + draft.rows[missing].asim_field + '.';
+      }
+      const targets = new Set(), assigned = new Set();
+      for (const row of draft.rows) {
+        const field = fieldMap().get(row.asim_field);
+        if (!field || field.kql_type !== row.transform) return 'Check the target field and conversion for ' + (row.asim_field || 'the incomplete row') + '.';
+        if (managedFields().has(row.asim_field)) return row.asim_field + ' is supplied by setup or the platform.';
+        if (targets.has(row.asim_field)) return 'Resolve duplicate target field ' + row.asim_field + '.';
+        targets.add(row.asim_field);
+        if (row.source_kind === 'slot') {
+          if (!slots.has(row.locator)) return 'Choose an existing extracted slot for ' + row.asim_field + '.';
+          if (assigned.has(row.locator)) return 'Resolve duplicate slot ' + row.locator + '.';
+          assigned.add(row.locator);
+        } else if (row.source_kind === 'source_field') {
+          const ingestionTime = setup && setup.time_generated === 'ingestion' && row.locator === 'TimeGenerated';
+          if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(row.locator) || (reference && !(row.locator in reference.source_columns) && !ingestionTime)) return 'Choose a known source-table field for ' + row.asim_field + '.';
+        } else {
+          if (field.allowed_values.length && !field.allowed_values.includes(row.constant_value)) return 'Use a catalogue value for ' + row.asim_field + ': ' + field.allowed_values.join(', ');
+          if (['int', 'long'].includes(row.transform)) {
+            if (!/^-?\d+$/.test(row.constant_value)) return 'Use an integer constant for ' + row.asim_field + '.';
+            const bits = row.transform === 'int' ? 32n : 64n;
+            const value = BigInt(row.constant_value), limit = 2n ** (bits - 1n);
+            if (value < -limit || value >= limit) return 'Constant is outside the ' + row.transform + ' range for ' + row.asim_field + '.';
+          }
+          if (row.transform === 'real' && (!row.constant_value.trim() || !Number.isFinite(Number(row.constant_value)))) return 'Use a finite number for ' + row.asim_field + '.';
+          if (row.transform === 'bool' && !['true', 'false'].includes(row.constant_value.toLowerCase())) return 'Use true or false for ' + row.asim_field + '.';
+          if (row.transform === 'datetime' && (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(row.constant_value) || !Number.isFinite(Date.parse(row.constant_value)))) return 'Use an ISO date or timestamp for ' + row.asim_field + '.';
+        }
+      }
+      return null;
+    }
+    document.getElementById('ll-add').addEventListener('click', () => {
+      draft.rows.push({source_kind: 'slot', locator: '', role: '', asim_field: '', transform: 'string', constant_value: ''}); activeRow = draft.rows.length - 1; changed(); renderRows();
+    });
+    document.getElementById('ll-approve').addEventListener('click', () => {
+      const message = validate(); if (message) { fail(message); return; }
+      error.hidden = true; draft.status = 'approved'; store();
+    });
+    [['ll-extraction', 'needs_extraction'], ['ll-defer', 'deferred'], ['ll-draft', 'in_progress']].forEach(([id, status]) => {
+      document.getElementById(id).addEventListener('click', () => { error.hidden = true; draft.status = status; store(); });
+    });
+    const originalRows = JSON.stringify(draft.rows);
+    activateSchema(draft.schema_name);
+    if (originalRows !== JSON.stringify(draft.rows) && draft.status === 'approved') draft.status = 'in_progress';
+    rememberSchema(); renderRows(); warnings(); schemaState();
+    document.getElementById('ll-status').textContent = draft.cluster_status === 'approved' ? statusNames[draft.status] : clusterNames[draft.cluster_status];
+    // Seed only a draft; merely viewing or navigating can never approve a mapping.
+    storage.value = JSON.stringify(draft);
+  }
+  // Potato clears browser-restored controls and restores server annotations at
+  // DOMContentLoaded. Build this editor afterwards so that reset cannot erase it.
+  if (document.readyState !== 'complete') window.addEventListener('load', initialise, {once: true});
+  else initialise();
+})();
+</script>

@@ -1,0 +1,8 @@
+{
+  "schema_versions": {
+    "Authentication": "0.1.3",
+    "AuditEvent": "0.1.2",
+    "NetworkSession": "0.2.7"
+  },
+  "time_generated": "source"
+}

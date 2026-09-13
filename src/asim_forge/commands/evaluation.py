@@ -237,6 +237,11 @@ def register_evaluation_parser(
     evaluation_benchmark.add_argument("--output", type=Path, default=Path("artifacts/evaluation"))
     evaluation_benchmark.add_argument("--cache", type=Path, help="Optional shared download cache")
     evaluation_benchmark.add_argument(
+        "--local-only",
+        action="store_true",
+        help="Evaluate only registered corpora with repository-local resources",
+    )
+    evaluation_benchmark.add_argument(
         "--revision", default="unknown", help="Source revision recorded in the report"
     )
     evaluation_benchmark.add_argument(
@@ -422,6 +427,7 @@ def run_evaluation_command(args: argparse.Namespace) -> None:
             args.output,
             catalog_dir=args.catalog,
             cache_dir=args.cache,
+            local_only=args.local_only,
             revision=args.revision,
             baseline_path=args.baseline,
         )

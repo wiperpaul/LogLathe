@@ -132,3 +132,29 @@ def test_reports_stage_one_approval_as_awaiting_mapping(tmp_path: Path) -> None:
         "skipped_reviews"
     ] == {"awaiting_mapping": 1}
     assert list(output_dir.glob("*.kql")) == []
+
+
+def test_source_columns_are_captured_before_targets_overwrite_them(tmp_path: Path) -> None:
+    clusters = tmp_path / "clusters.jsonl"
+    cluster = _write_cluster(clusters)
+    review = _review(cluster.cluster_id)
+    review["field_mappings"] = [
+        {"source_field": "SrcIpAddr", "asim_field": "DstIpAddr"},
+        {"source_field": "DstIpAddr", "asim_field": "SrcIpAddr"},
+        {"source_field": "TimeGenerated", "asim_field": "EventStartTime", "transform": "datetime"},
+        {"constant_value": 'quote" backslash\\ newline\n雪', "asim_field": "EventMessage"},
+        {"constant_value": False, "asim_field": "Flag", "transform": "bool"},
+        {"constant_value": 0, "asim_field": "EventCount", "transform": "int"},
+    ]
+    state = tmp_path / "reviews.jsonl"
+    state.write_text(json.dumps(review) + "\n", encoding="utf-8")
+    output = tmp_path / "compiled"
+    compile_reviews(clusters, state, output)
+    kql = (output / "vimDemoAuth.kql").read_text("utf-8")
+    assert kql.index("_asim_forge_source_2 = DstIpAddr") < kql.index("DstIpAddr = tostring(")
+    assert "SrcIpAddr = tostring(_asim_forge_source_2)" in kql
+    assert "EventStartTime = todatetime(_asim_forge_source_3)" in kql
+    assert 'EventMessage = tostring("quote\\" backslash\\\\ newline\\n雪")' in kql
+    assert "Flag = tobool(false)" in kql
+    assert "EventCount = toint(0)" in kql
+    assert "project-away _asim_forge_source_1, _asim_forge_source_2, _asim_forge_source_3" in kql
