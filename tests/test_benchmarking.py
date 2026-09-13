@@ -164,6 +164,28 @@ def test_verified_fetch_does_not_retry_missing_resource(
     assert attempts == 1
 
 
+def test_local_corpus_resource_is_hash_checked_and_confined_to_manifest(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "manifest"
+    source.mkdir()
+    content = b"first log\n"
+    (source / "input.log").write_bytes(content)
+    resource = CorpusResource(
+        role="input", url="local:input.log", sha256=hashlib.sha256(content).hexdigest()
+    )
+    cache = tmp_path / "cache"
+    assert _fetch_verified(resource, cache, source_dir=source) == content
+    (source / "input.log").write_bytes(b"modified\n")
+    with pytest.raises(BenchmarkError, match="Checksum mismatch"):
+        _fetch_verified(resource, cache, source_dir=source)
+
+    outside = CorpusResource(role="input", url="local:../outside.log", sha256="a" * 64)
+    (tmp_path / "outside.log").write_bytes(b"outside\n")
+    with pytest.raises(BenchmarkError, match="escapes its manifest"):
+        _fetch_verified(outside, cache, source_dir=source)
+
+
 def test_archive_jsonl_resource_extracts_only_requested_field(tmp_path: Path) -> None:
     jsonl = b'{"raw_log":"first log","secret":"x"}\n{"raw_log":"second log"}\n'
     archive_bytes = io.BytesIO()

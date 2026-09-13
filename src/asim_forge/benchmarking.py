@@ -330,7 +330,9 @@ def run_benchmarks(
         with tempfile.TemporaryDirectory(prefix="asim-forge-benchmark-") as temporary:
             staged = Path(temporary)
             resource_paths = {
-                resource.role: _stage_resource(resource, cache, staged, manifest.max_events)
+                resource.role: _stage_resource(
+                    resource, cache, staged, manifest.max_events, source_dir=path.parent
+                )
                 for resource in manifest.resources
             }
             events, _ = read_events(staged / "input")
@@ -770,8 +772,10 @@ def _stage_resource(
     cache_dir: Path,
     staged: Path,
     max_events: int | None,
+    *,
+    source_dir: Path | None = None,
 ) -> Path:
-    content = _fetch_verified(resource, cache_dir)
+    content = _fetch_verified(resource, cache_dir, source_dir=source_dir)
     if resource.archive_member is not None:
         try:
             with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as archive:
@@ -804,10 +808,22 @@ def _stage_resource(
     return path
 
 
-def _fetch_verified(resource: CorpusResource, cache_dir: Path) -> bytes:
+def _fetch_verified(
+    resource: CorpusResource, cache_dir: Path, *, source_dir: Path | None = None
+) -> bytes:
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = cache_dir / f"{resource.sha256}.blob"
-    if path.is_file():
+    local = resource.url.startswith("local:")
+    if local:
+        if source_dir is None:
+            raise BenchmarkError("A local corpus resource requires its manifest directory")
+        source_path = (source_dir / resource.url.removeprefix("local:")).resolve()
+        if not source_path.is_relative_to(source_dir.resolve()) or not source_path.is_file():
+            raise BenchmarkError(
+                f"Local corpus resource is missing or escapes its manifest: {resource.url}"
+            )
+        content = source_path.read_bytes()
+    elif path.is_file():
         content = path.read_bytes()
     else:
         request = Request(resource.url, headers={"User-Agent": "ASIM-Forge-Benchmark/1"})
@@ -828,7 +844,7 @@ def _fetch_verified(resource: CorpusResource, cache_dir: Path) -> bytes:
         raise BenchmarkError(
             f"Checksum mismatch for {resource.url}: expected {resource.sha256}, got {actual}"
         )
-    if not path.is_file():
+    if not local and not path.is_file():
         path.write_bytes(content)
     return content
 

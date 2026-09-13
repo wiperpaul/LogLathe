@@ -67,6 +67,7 @@ jobs:
               for manifest in [json.loads(manifest_file.read_text(encoding="utf-8"))]
               if manifest["source"]["redistribution"] == "content"
               for resource in manifest.get("resources", [])
+              if not resource["url"].startswith("local:")
           }
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write("paths<<EOF\n")

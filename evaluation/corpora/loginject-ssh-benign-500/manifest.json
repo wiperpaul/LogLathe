@@ -17,10 +17,8 @@
   "resources": [
     {
       "role": "input",
-      "url": "https://zenodo.org/records/20436935/files/loginject_usenix26_artifact_submission_revised_before_upload_tar.gz?download=1",
-      "sha256": "010118d6cfbb03440bb7178d431912a2207f602c9ed546f47667a37d03820a8f",
-      "archive_member": "loginject_usenix26_artifact_submission/artifact/data/benign/ssh_auth.jsonl",
-      "jsonl_field": "raw_log"
+      "url": "local:input.log",
+      "sha256": "c1aacfd5e69e93ac11317c7283f3aa2981c9ce8cd806afd91cb5389490d1ce04"
     }
   ],
   "max_events": 500

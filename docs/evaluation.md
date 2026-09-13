@@ -312,10 +312,14 @@ misleading before-and-after value.
 
 Every registered corpus has an `evaluation/corpora/<id>/manifest.json`. Remote
 resources use immutable revisions where possible and declare a SHA-256 digest. The
-runner verifies bytes before use, selects one exact archive member rather than
-extracting a tree, and converts LogInject JSONL through only its declared `raw_log`
-field. Local semantic cases, split files, frozen case groups, and promotion
-manifests contribute to the corpus fingerprint.
+runner verifies bytes before use and selects exact archive members where declared.
+Local semantic cases, split files, frozen case groups, and promotion manifests
+contribute to the corpus fingerprint.
+
+The two LogInject benign diagnostic corpora pin the first 500 `raw_log` values from
+the SHA-256-verified Zenodo archive in small, attributed `input.log` fixtures. Their
+resource hashes are checked on each run. The originating archive is not required
+for CI, and no injection or security labels are treated as ASIM ground truth.
 
 The machine-actionable redistribution class controls what may leave the local
 machine:
@@ -335,7 +339,7 @@ Downloads and generated results remain under ignored `artifacts/`; downstream
 users remain responsible for the terms recorded in each manifest.
 The benchmark reuses local downloads by SHA-256 when its `--cache` directory is
 retained. GitHub-hosted CI starts with a fresh runner; its workflow restores and
-saves only the blobs whose corpus manifests permit `content` redistribution.
+saves only remote blobs whose corpus manifests permit `content` redistribution.
 Other remote resources are fetched on each run. All restored bytes are verified
 against their manifest digests, and transient HTTP failures receive bounded retries.
 
