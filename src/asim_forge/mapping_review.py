@@ -256,7 +256,7 @@ def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> Mapp
             task,
             catalog,
             name,
-            task.schema_predictions.get(name) or (prediction if name == suggested_schema else None),
+            prediction if name == suggested_schema else None,
         )
         for name in available
     }

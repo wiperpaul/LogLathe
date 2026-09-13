@@ -121,15 +121,13 @@ def test_field_suggestions_are_independent_for_each_review_schema(mapping_bundle
 
 def test_new_schema_does_not_inherit_previous_schema_suggestions(mapping_bundle):
     _, task, catalog, _ = mapping_bundle
-    task = task.model_copy(deep=True)
     suggested_schema = task.prediction.ranked_schemas[0].schema_name
     other_schema = next(name for name in task.schema_predictions if name != suggested_schema)
-    task.schema_predictions[other_schema] = task.schema_predictions[other_schema].model_copy(
-        update={"asim_fields": [], "disposition": "unresolved"}
-    )
+    assert task.schema_predictions[other_schema].asim_fields
     draft = initial_mapping_draft(task, catalog)
     assert any(row.locator for row in draft.schema_rows[suggested_schema])
     assert all(not row.locator for row in draft.schema_rows[other_schema])
+    assert all(not row.constant_value for row in draft.schema_rows[other_schema])
     assert draft.schema_rows[other_schema]
 
 

@@ -141,9 +141,11 @@ cluster task into a prepared mapping task remains future work.
 First assess and confirm **one schema per template**. Confirmation opens the
 **Mappings** tab. Return to **Schema** to reassess the choice. Changing the schema
 requires confirmation again and loads field suggestions projected against that
-schema's catalogue. Rows and evidence from the previous schema do not seed it,
-even when field names overlap. Switching back restores the first schema's edits.
-Each schema's draft is saved independently, including edits to shared fields.
+schema's catalogue as evidence in **Schema**. The new schema starts with blank
+required mapping rows, even when suggested fields overlap with the previous
+schema. Select and map any suggested field you agree with. Switching back
+restores the first schema's edits. Each schema's draft is saved independently,
+including edits to shared fields.
 
 Select a mapping in the compact list, then select its exact source text in a
 representative event. NER-style highlights show the template's extracted slots

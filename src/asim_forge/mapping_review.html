@@ -52,6 +52,7 @@
     <summary id="ll-managed-summary">Automatically supplied fields</summary>
     <div id="ll-managed" class="ll-supplied"></div>
   </details>
+  <p id="ll-mapping-origin" class="ll-caption" role="status"></p>
   <div id="ll-warnings" class="ll-note" role="note"></div>
   <fieldset id="ll-field-editor" disabled>
   <div class="ll-workspace">
@@ -348,6 +349,9 @@
       document.getElementById('ll-confirm-schema').textContent = confirmed ? 'Continue to mappings' : 'Confirm schema and review fields';
       document.getElementById('ll-schema-status').textContent = confirmed ? 'Schema confirmed. Review the fields below.' : 'Assess the suggested schema before reviewing fields.';
       document.getElementById('ll-schema-version').textContent = setup && valid ? 'EventSchemaVersion: ' + setup.schema_versions[draft.schema_name] + ' — supplied automatically from setup.' : 'A version must be available in setup for the selected schema.';
+      const suggestedSchema = task.prediction.ranked_schemas[0]?.schema_name;
+      document.getElementById('ll-mapping-origin').textContent = valid && draft.schema_name !== suggestedSchema ?
+        draft.schema_name + ' mappings start with blank required fields. Suggestions are evidence under Schema until you choose to map them.' : '';
       document.getElementById('ll-schema-summary').textContent = (draft.schema_name || 'Choose a schema') + (confirmed ? ' · Confirmed' : ' · Unconfirmed');
       document.getElementById('ll-cluster-summary').textContent = clusterNames[draft.cluster_status];
       document.getElementById('ll-tab-schema').disabled = !clusterApproved;
@@ -607,7 +611,7 @@
         suggestions.append(element('p', 'No field suggestions were generated for ' + (draft.schema_name || 'an unselected schema') + '. Review its required fields directly.'));
         return;
       }
-      suggestions.append(element('p', 'Field suggestions for ' + draft.schema_name + ':'));
+      suggestions.append(element('p', 'Field suggestions for ' + draft.schema_name + ' (not applied automatically when changing schema):'));
       const evidenceList = element('ul');
       prediction.asim_fields.forEach(item => evidenceList.append(element('li', item.locator + ' → ' + item.asim_field + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
       suggestions.append(evidenceList);
