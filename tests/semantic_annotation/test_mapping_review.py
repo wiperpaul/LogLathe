@@ -26,6 +26,8 @@ from asim_forge.mapping_review import (
 from asim_forge.models import AsimCatalog, FieldMapping, ParameterSlot, SourceEvent
 from asim_forge.potato_bundle import example_slot_spans
 from asim_forge.reviews import ReviewError, load_review_decisions
+from asim_forge.semantic_mapping.approaches import build_approach
+from asim_forge.semantic_mapping.contracts import MappingRequest
 
 
 @pytest.fixture
@@ -94,6 +96,56 @@ def test_preparation_keeps_source_queue_blind_and_uses_potato(mapping_bundle):
     assert not (bundle / "potato/annotation_output").exists()
     with pytest.raises(ReviewError, match="empty mapping review"):
         prepare_mapping_review(bundle / "queue", bundle / "catalog", bundle)
+
+
+def test_field_suggestions_are_independent_for_each_review_schema(mapping_bundle):
+    _, task, catalog, _ = mapping_bundle
+    assert task.setup is not None
+    assert set(task.schema_predictions) == set(task.setup.schema_versions)
+    draft = initial_mapping_draft(task, catalog)
+    assert set(draft.schema_rows) == set(task.setup.schema_versions)
+    suggested_schema = task.prediction.ranked_schemas[0].schema_name
+    assert draft.rows == draft.schema_rows[suggested_schema]
+    for schema, prediction in task.schema_predictions.items():
+        fields = {field.name: field for field in catalog.fields_for_schema(schema)}
+        assert all(mapping.asim_field in fields for mapping in prediction.asim_fields)
+        assert all(row.asim_field in fields for row in draft.schema_rows[schema])
+        assert all(
+            row.transform == fields[row.asim_field].kql_type for row in draft.schema_rows[schema]
+        )
+    other_schema = next(name for name in draft.schema_rows if name != suggested_schema)
+    before = [row.model_dump() for row in draft.schema_rows[other_schema]]
+    draft.schema_rows[suggested_schema][0].locator = "changed-in-one-schema"
+    assert [row.model_dump() for row in draft.schema_rows[other_schema]] == before
+
+
+def test_new_schema_does_not_inherit_previous_schema_suggestions(mapping_bundle):
+    _, task, catalog, _ = mapping_bundle
+    task = task.model_copy(deep=True)
+    suggested_schema = task.prediction.ranked_schemas[0].schema_name
+    other_schema = next(name for name in task.schema_predictions if name != suggested_schema)
+    task.schema_predictions[other_schema] = task.schema_predictions[other_schema].model_copy(
+        update={"asim_fields": [], "disposition": "unresolved"}
+    )
+    draft = initial_mapping_draft(task, catalog)
+    assert any(row.locator for row in draft.schema_rows[suggested_schema])
+    assert all(not row.locator for row in draft.schema_rows[other_schema])
+    assert draft.schema_rows[other_schema]
+
+
+@pytest.mark.parametrize("approach", ["semantic-frame", "direct-lexical", "matcher-ensemble"])
+def test_review_schema_projects_fields_into_selected_catalogue(mapping_bundle, approach):
+    _, task, catalog, _ = mapping_bundle
+    request = MappingRequest(
+        case_id=task.source_task.case_id,
+        catalogue_revision=task.source_task.catalogue_revision,
+        input=task.source_task.input,
+        review_schema="NetworkSession",
+    )
+    prediction = build_approach(approach).predict(request, catalog)
+    allowed = {field.name for field in catalog.fields_for_schema("NetworkSession")}
+    assert all(mapping.asim_field in allowed for mapping in prediction.asim_fields)
+    assert prediction.ranked_schemas == task.prediction.ranked_schemas
 
 
 def test_example_spans_only_identify_template_captures():

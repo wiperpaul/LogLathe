@@ -236,8 +236,7 @@
     }
     function rememberSchema() {
       if (!configuredSchemas.includes(draft.schema_name)) return;
-      const hidden = (draft.schema_rows[draft.schema_name] || []).filter(row => !editableRow(row));
-      draft.schema_rows[draft.schema_name] = structuredClone([...draft.rows, ...hidden]);
+      draft.schema_rows[draft.schema_name] = structuredClone(draft.rows);
     }
     function hasSource(row) { return Boolean((row.source_kind === 'constant' ? row.constant_value : row.locator).trim()); }
     function requiredFields() {
@@ -254,9 +253,8 @@
       }
     }
     function activateSchema(name) {
-      const previous = draft.schema_name;
       rememberSchema();
-      const candidates = draft.schema_rows[name] || draft.schema_rows[previous] || draft.rows;
+      const candidates = draft.schema_rows[name] || [];
       draft.schema_name = name;
       if (configuredSchemas.includes(name) && !draft.schema_rows[name]) draft.schema_rows[name] = structuredClone(candidates);
       draft.rows = configuredSchemas.includes(name) ? structuredClone(candidates.filter(row => editableRow(row, name))) : [];
@@ -359,6 +357,7 @@
       block.textContent = clusterNames[draft.cluster_status] + '. Mapping edits are retained. Resolve the cluster review before continuing; this item cannot compile.';
       showStep(activeStep);
       renderTemplate();
+      renderSuggestions();
     }
     schema.addEventListener('change', () => { activateSchema(schema.value); draft.schema_confirmed = false; changed(); renderRows(); schemaState(); });
     document.getElementById('ll-confirm-schema').addEventListener('click', () => {
@@ -564,7 +563,8 @@
       });
     }
     function warnings() {
-      const warnings = [...task.prediction.warnings];
+      const prediction = fieldPrediction();
+      const warnings = [...(prediction?.warnings || [])];
       const represented = new Set(draft.rows.map(row => row.asim_field));
       const managed = managedFields();
       managed.forEach((_, name) => represented.add(name));
@@ -581,7 +581,7 @@
       });
       table.append(body); supplied.replaceChildren(table);
       if (reference && draft.schema_name && (reference.schema_name !== draft.schema_name || (setup && reference.schema_version !== setup.schema_versions[draft.schema_name]))) warnings.push('Reference output uses ' + reference.schema_name + ' ' + reference.schema_version + '; review targets ' + draft.schema_name + (setup ? ' ' + setup.schema_versions[draft.schema_name] : '') + '.');
-      task.prediction.asim_fields.forEach(mapping => {
+      (prediction?.asim_fields || []).forEach(mapping => {
         if (mapping.source_kind !== 'slot' && mapping.constant_value === null && !represented.has(mapping.asim_field)) {
           warnings.push('Extraction or derivation needed for ' + mapping.locator + ' → ' + mapping.asim_field + '.');
         }
@@ -590,18 +590,34 @@
       const box = document.getElementById('ll-warnings'); box.replaceChildren(); box.hidden = !warnings.length;
       warnings.forEach(message => box.append(element('div', message)));
     }
-    const suggestions = document.getElementById('ll-suggestions');
-    suggestions.append(element('p', 'Approach: ' + task.prediction.approach.name + ' ' + task.prediction.approach.version + '. Ranking scores are not calibrated probabilities.'));
-    const evidenceList = element('ul');
-    task.prediction.ranked_schemas.forEach(item => evidenceList.append(element('li', item.schema_name + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
-    task.prediction.asim_fields.forEach(item => evidenceList.append(element('li', item.locator + ' → ' + item.asim_field + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
-    suggestions.append(evidenceList);
-    const interpretations = element('details');
-    interpretations.append(element('summary', 'Internal source-role evidence'));
-    interpretations.append(element('p', 'These are the mapper’s internal descriptions of what values represent in the event. They are not OCSF fields and do not need editing here. Use review notes to flag an incorrect interpretation.'));
-    const roles = element('ul');
-    task.prediction.source_semantics.forEach(item => roles.append(element('li', item.locator + ': ' + item.role)));
-    interpretations.append(roles); suggestions.append(interpretations);
+    function fieldPrediction() {
+      const suggestedSchema = task.prediction.ranked_schemas[0]?.schema_name;
+      return task.schema_predictions?.[draft.schema_name] ||
+        (draft.schema_name === suggestedSchema ? task.prediction : null);
+    }
+    function renderSuggestions() {
+      const suggestions = document.getElementById('ll-suggestions');
+      suggestions.replaceChildren();
+      suggestions.append(element('p', 'Approach: ' + task.prediction.approach.name + ' ' + task.prediction.approach.version + '. Ranking scores are not calibrated probabilities.'));
+      const schemaList = element('ul');
+      task.prediction.ranked_schemas.forEach(item => schemaList.append(element('li', item.schema_name + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
+      suggestions.append(schemaList);
+      const prediction = fieldPrediction();
+      if (!prediction) {
+        suggestions.append(element('p', 'No field suggestions were generated for ' + (draft.schema_name || 'an unselected schema') + '. Review its required fields directly.'));
+        return;
+      }
+      suggestions.append(element('p', 'Field suggestions for ' + draft.schema_name + ':'));
+      const evidenceList = element('ul');
+      prediction.asim_fields.forEach(item => evidenceList.append(element('li', item.locator + ' → ' + item.asim_field + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
+      suggestions.append(evidenceList);
+      const interpretations = element('details');
+      interpretations.append(element('summary', 'Internal source-role evidence'));
+      interpretations.append(element('p', 'These are the mapper’s internal descriptions of what values represent in the event. They are not OCSF fields and do not need editing here. Use review notes to flag an incorrect interpretation.'));
+      const roles = element('ul');
+      prediction.source_semantics.forEach(item => roles.append(element('li', item.locator + ': ' + item.role)));
+      interpretations.append(roles); suggestions.append(interpretations);
+    }
     if (reference) {
       document.getElementById('ll-reference').hidden = false;
       const content = document.getElementById('ll-reference-content');

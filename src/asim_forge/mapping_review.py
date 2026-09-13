@@ -61,6 +61,7 @@ class MappingReviewTask(StrictModel):
     mode: Literal["assisted-engineering"] = "assisted-engineering"
     source_task: SemanticAnnotationTask
     prediction: SemanticMappingPrediction
+    schema_predictions: dict[AsimSchema, SemanticMappingPrediction] = Field(default_factory=dict)
     catalogue_sha256: str
     reference: ReferenceReviewEvidence | None = None
     cluster_notes: str = ""
@@ -72,6 +73,8 @@ class MappingReviewTask(StrictModel):
         excluded = {"review_revision"}
         if self.setup is None:
             excluded.add("setup")  # Keep already prepared bundles readable.
+        if not self.schema_predictions:
+            excluded.add("schema_predictions")  # Keep earlier frozen bundles readable.
         if self.review_revision != _fingerprint(self.model_dump(mode="json", exclude=excluded)):
             raise ValueError(
                 "Mapping review revision does not match the frozen evidence and suggestion"
@@ -81,6 +84,24 @@ class MappingReviewTask(StrictModel):
             or self.prediction.catalogue_revision != self.source_task.catalogue_revision
         ):
             raise ValueError("Suggestion and source task must identify the same case and catalogue")
+        if self.prediction.ranked_schemas:
+            top_schema = self.prediction.ranked_schemas[0].schema_name
+            if (
+                top_schema in self.schema_predictions
+                and self.schema_predictions[top_schema] != self.prediction
+            ):
+                raise ValueError("Top-ranked field suggestions must match the original prediction")
+        for schema, prediction in self.schema_predictions.items():
+            if self.setup is not None and schema not in self.setup.schema_versions:
+                raise ValueError("Field suggestions require a schema available in setup")
+            if (
+                prediction.case_id != self.source_task.case_id
+                or prediction.catalogue_revision != self.source_task.catalogue_revision
+                or prediction.approach != self.prediction.approach
+            ):
+                raise ValueError(
+                    "Schema field suggestions must match the frozen source and approach"
+                )
         return self
 
 
@@ -172,15 +193,19 @@ def required_mapping_fields(
     ]
 
 
-def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> MappingReviewDraft:
-    prediction = task.prediction
-    schema = prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
-    if task.setup is not None and schema not in task.setup.schema_versions:
-        schema = ""
+def _suggested_rows(
+    task: MappingReviewTask,
+    catalog: AsimCatalog,
+    schema: str,
+    prediction: SemanticMappingPrediction | None,
+) -> list[MappingRow]:
     fields = {field.name: field for field in catalog.fields_for_schema(schema)} if schema else {}
-    roles = {(item.source_kind, item.locator): item.role for item in prediction.source_semantics}
-    rows = []
-    for mapping in prediction.asim_fields:
+    roles = {
+        (item.source_kind, item.locator): item.role
+        for item in (prediction.source_semantics if prediction else [])
+    }
+    rows: list[MappingRow] = []
+    for mapping in prediction.asim_fields if prediction else []:
         if mapping.asim_field in _managed_fields(task):
             continue
         field = fields.get(mapping.asim_field)
@@ -216,6 +241,25 @@ def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> Mapp
                     else "string",
                 )
             )
+    return rows
+
+
+def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> MappingReviewDraft:
+    prediction = task.prediction
+    schema = prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
+    if task.setup is not None and schema not in task.setup.schema_versions:
+        schema = ""
+    suggested_schema = prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
+    available = task.setup.schema_versions if task.setup else ([schema] if schema else [])
+    schema_rows = {
+        name: _suggested_rows(
+            task,
+            catalog,
+            name,
+            task.schema_predictions.get(name) or (prediction if name == suggested_schema else None),
+        )
+        for name in available
+    }
     metadata = task.source_task.input.source_metadata
     return MappingReviewDraft(
         review_revision=task.review_revision,
@@ -226,7 +270,8 @@ def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> Mapp
         product=metadata.product or "",
         source_table=metadata.source_table or "Syslog",
         message_field=metadata.message_field or "SyslogMessage",
-        rows=rows,
+        rows=schema_rows.get(schema, []),
+        schema_rows=schema_rows,
     )
 
 
@@ -303,11 +348,24 @@ def prepare_mapping_review(
             case_id=task.case_id, catalogue_revision=task.catalogue_revision, input=task.input
         )
         prediction = approach.predict(request, catalog)
+        suggested_schema = (
+            prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
+        )
+        schema_predictions = {
+            name: prediction
+            if name == suggested_schema
+            else approach.predict(request.model_copy(update={"review_schema": name}), catalog)
+            for name in setup.schema_versions
+        }
         reference = references.get(task.case_id)
         payload = {
             "mode": "assisted-engineering",
             "source_task": task.model_dump(mode="json"),
             "prediction": prediction.model_dump(mode="json"),
+            "schema_predictions": {
+                name: suggestion.model_dump(mode="json")
+                for name, suggestion in schema_predictions.items()
+            },
             "catalogue_sha256": catalog.manifest.content_sha256,
             "reference": reference.model_dump(mode="json") if reference else None,
             "cluster_notes": notes.get(task.case_id, ""),
@@ -369,6 +427,10 @@ def load_mapping_review(bundle_dir: Path) -> tuple[list[MappingReviewTask], Asim
             or task.catalogue_revision != catalog.manifest.resolved_revision
         ):
             raise ReviewError("Mapping review source or catalogue provenance does not match")
+        for schema, prediction in review.schema_predictions.items():
+            field_names = {field.name for field in catalog.fields_for_schema(schema)}
+            if any(mapping.asim_field not in field_names for mapping in prediction.asim_fields):
+                raise ReviewError(f"Field suggestions do not belong to {schema}")
     return tasks, catalog
 
 
