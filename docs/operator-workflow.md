@@ -144,10 +144,16 @@ requires confirmation again and updates its required fields. Incompatible mappin
 leave the active list; switching back restores that schema's edits. Each schema's
 draft is saved independently, including edits to fields shared by several schemas.
 
-Select an extracted slot in the template or an entry in the compact mapping list.
-One mapping editor opens beside the list; the source example remains visible.
-Selecting an unmapped slot adds a mapping for that slot. This selects existing
-extracted slots; arbitrary text-span correction is not yet wired into extraction.
+Select a mapping in the compact list, then select its exact source text in a
+representative event. NER-style highlights show the template's extracted slots
+and their ASIM labels. A matching span assigns that existing slot. If the
+selection falls outside a slot or covers only part of one, the review retains
+the selected text and offsets but cannot approve it as a parser mapping; mark
+**Needs extraction work**. Expand **Template and extracted slots** to assign a
+slot directly when an example cannot be selected. Source-table fields and
+fixed values remain available from the source dropdown for exceptional mappings.
+The selected source span is review evidence, not a new extraction rule; a later
+cluster/extraction change still requires a fresh review bundle.
 Select ASIM fields from the catalogue dropdown, grouped by requirement class, and
 check their conversions. Setup-owned fields appear in a collapsed section and are
 excluded from the dropdown. Fields requiring unsupported conversions are also
@@ -156,6 +162,9 @@ inactive drafts remain saved in Potato. Parser naming remains under **Parser set
 
 This arrangement uses Potato's supported
 [task-layout customization](https://potatoannotator.readthedocs.io/en/latest/configuration/ui_configuration/#task-layout-customization).
+The span interaction follows Potato's
+[NER span-labeling pattern](https://potatoannotator.readthedocs.io/en/latest/annotation-types/schemas_and_templates/#text-span-selection-span)
+while the linked ASIM mapping draft remains in Potato's existing annotation state.
 The [MultiCoNER](https://www.potatoannotator.com/showcase/complex-ner) and
 [CrossRE](https://www.potatoannotator.com/showcase/crossre-cross-domain-relations)
 showcase adaptations provide references for keeping source text and labels together.

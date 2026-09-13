@@ -15,6 +15,7 @@ from asim_forge.mapping_review import (
     MappingReviewSetup,
     MappingReviewTask,
     MappingRow,
+    SourceSpan,
     initial_mapping_draft,
     load_mapping_decisions,
     load_mapping_review,
@@ -22,7 +23,8 @@ from asim_forge.mapping_review import (
     required_mapping_fields,
     validate_mapping_draft,
 )
-from asim_forge.models import AsimCatalog, FieldMapping
+from asim_forge.models import AsimCatalog, FieldMapping, ParameterSlot, SourceEvent
+from asim_forge.potato_bundle import example_slot_spans
 from asim_forge.reviews import ReviewError, load_review_decisions
 
 
@@ -87,9 +89,65 @@ def test_preparation_keeps_source_queue_blind_and_uses_potato(mapping_bundle):
     config = yaml.safe_load((bundle / "potato/config.yaml").read_text("utf-8"))
     assert config["task_layout"] == "mapping-layout.html"
     assert config["annotation_schemes"][0]["annotation_type"] == "text"
+    item = json.loads((bundle / "potato/items.jsonl").read_text("utf-8").splitlines()[0])
+    assert "example_slot_spans" in item
     assert not (bundle / "potato/annotation_output").exists()
     with pytest.raises(ReviewError, match="empty mapping review"):
         prepare_mapping_review(bundle / "queue", bundle / "catalog", bundle)
+
+
+def test_example_spans_only_identify_template_captures():
+    slots = [
+        ParameterSlot(slot_id="p1", label="user", placeholder="<VAR:USER>", occurrence=1),
+        ParameterSlot(slot_id="p2", label="ip", placeholder="<VAR:IP>", occurrence=1),
+    ]
+    events = [
+        SourceEvent(source_file="test", line_number=1, text="user root from 192.0.2.1"),
+        SourceEvent(source_file="test", line_number=2, text="different message"),
+    ]
+    spans = example_slot_spans("user <VAR:USER> from <VAR:IP>", events, slots)
+    assert spans == [
+        [
+            {"slot_id": "p1", "start": 5, "end": 9, "text": "root"},
+            {"slot_id": "p2", "start": 15, "end": 24, "text": "192.0.2.1"},
+        ],
+        [],
+    ]
+    assert example_slot_spans("<VAR:A><VAR:B>", events, slots) == [[], []]
+
+
+def test_reviewed_span_must_match_frozen_extraction(mapping_bundle):
+    _, task, catalog, _ = mapping_bundle
+    captures = example_slot_spans(
+        task.source_task.input.template,
+        task.source_task.input.representative_events,
+        task.source_task.input.parameter_slots,
+    )
+    example_index, selected = next(
+        (index, span)
+        for index, spans in enumerate(captures)
+        for span in spans
+        if span["slot_id"] == "p1"
+    )
+    draft = _draft(task, catalog)
+    draft.rows[0].source_span = SourceSpan(
+        example_index=example_index,
+        start=selected["start"],
+        end=selected["end"],
+        text=selected["text"],
+    )
+    assert validate_mapping_draft(draft, task, catalog)
+    draft.rows[0].source_span = draft.rows[0].source_span.model_copy(update={"text": "wrong"})
+    with pytest.raises(ReviewError, match="does not match"):
+        validate_mapping_draft(draft, task, catalog)
+    draft.rows[0].source_span = SourceSpan(
+        example_index=example_index,
+        start=selected["start"],
+        end=selected["end"] - 1,
+        text=selected["text"][:-1],
+    )
+    with pytest.raises(ReviewError, match="not an extracted slot"):
+        validate_mapping_draft(draft, task, catalog)
 
 
 @pytest.mark.parametrize("status", ["in_progress", "deferred", "needs_extraction", "approved"])

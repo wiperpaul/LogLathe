@@ -84,6 +84,15 @@ class MappingReviewTask(StrictModel):
         return self
 
 
+class SourceSpan(StrictModel):
+    """Reviewer-selected offsets within one frozen representative event."""
+
+    example_index: int = Field(ge=0)
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    text: str = Field(min_length=1)
+
+
 class MappingRow(StrictModel):
     source_kind: Literal["slot", "source_field", "constant"] = "slot"
     locator: str = ""
@@ -91,6 +100,7 @@ class MappingRow(StrictModel):
     asim_field: str = ""
     transform: Transform = "string"
     constant_value: str = ""
+    source_span: SourceSpan | None = None
 
 
 class MappingReviewDraft(StrictModel):
@@ -408,9 +418,35 @@ def validate_mapping_draft(
         field.name
         for field in required_mapping_fields(task, catalog, draft.schema_name, draft.rows)
     }
-    slots = {slot.slot_id for slot in task.source_task.input.parameter_slots}
+    from .potato_bundle import example_slot_spans
+
+    source_input = task.source_task.input
+    slots = {slot.slot_id for slot in source_input.parameter_slots}
+    captures = example_slot_spans(
+        source_input.template, source_input.representative_events, source_input.parameter_slots
+    )
     mappings = []
     for row in draft.rows:
+        if row.source_span is not None:
+            span = row.source_span
+            if span.example_index >= len(source_input.representative_events):
+                raise ReviewError("Selected source span refers to an unknown example")
+            example = source_input.representative_events[span.example_index].text
+            if (
+                span.end > len(example)
+                or span.start >= span.end
+                or example[span.start : span.end] != span.text
+            ):
+                raise ReviewError("Selected source span does not match the frozen example")
+            if row.source_kind != "slot" or not any(
+                capture["slot_id"] == row.locator
+                and capture["start"] == span.start
+                and capture["end"] == span.end
+                for capture in captures[span.example_index]
+            ):
+                raise ReviewError(
+                    "Selected source span is not an extracted slot; mark needs extraction"
+                )
         field = fields.get(row.asim_field)
         if field is None or field.kql_type != row.transform:
             raise ReviewError(f"Unknown target or incompatible conversion: {row.asim_field}")
