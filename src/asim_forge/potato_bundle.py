@@ -6,7 +6,7 @@ import html
 import json
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import yaml
 
@@ -16,6 +16,13 @@ if TYPE_CHECKING:
     from .mapping_review import MappingReviewTask
 
 _PLACEHOLDER = re.compile(r"<VAR:[A-Za-z0-9_]+>")
+
+
+class SlotSpan(TypedDict):
+    slot_id: str
+    start: int
+    end: int
+    text: str
 
 
 def write_potato_bundle(
@@ -102,6 +109,46 @@ def _render_template_html(template: str, parameter_slots: list[ParameterSlot]) -
         cursor = match.end()
     parts.append(html.escape(template[cursor:]))
     return "".join(parts)
+
+
+def example_slot_spans(
+    template: str, representative_events: list[SourceEvent], parameter_slots: list[ParameterSlot]
+) -> list[list[SlotSpan]]:
+    """Locate existing template captures in examples; never infer a new extraction."""
+    matches = list(_PLACEHOLDER.finditer(template))
+    if len(matches) != len(parameter_slots) or any(
+        left.end() == right.start() for left, right in zip(matches, matches[1:])
+    ):
+        return [[] for _ in representative_events]
+    parts = ["^"]
+    cursor = 0
+    for index, match in enumerate(matches):
+        parts.extend(
+            [
+                re.escape(template[cursor : match.start()]),
+                f"(?P<slot_{index}>.+?)",
+            ]
+        )
+        cursor = match.end()
+    parts.extend([re.escape(template[cursor:]), "$"])
+    pattern = re.compile("".join(parts), re.DOTALL)
+    result: list[list[SlotSpan]] = []
+    for event in representative_events:
+        found = pattern.fullmatch(event.text)
+        result.append(
+            [
+                SlotSpan(
+                    slot_id=slot.slot_id,
+                    start=found.start(f"slot_{index}"),
+                    end=found.end(f"slot_{index}"),
+                    text=found.group(f"slot_{index}"),
+                )
+                for index, slot in enumerate(parameter_slots)
+            ]
+            if found
+            else []
+        )
+    return result
 
 
 def _potato_config() -> dict[str, object]:
@@ -221,6 +268,9 @@ def write_mapping_potato_bundle(
                 "mapping_task": task.model_dump(mode="json"),
                 "initial_draft": initial_mapping_draft(task, catalog).model_dump(mode="json"),
                 "catalogue_fields": fields,
+                "example_slot_spans": example_slot_spans(
+                    source.template, source.representative_events, source.parameter_slots
+                ),
             }
         )
     _write_jsonl(bundle / "items.jsonl", items)

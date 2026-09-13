@@ -61,6 +61,7 @@ class MappingReviewTask(StrictModel):
     mode: Literal["assisted-engineering"] = "assisted-engineering"
     source_task: SemanticAnnotationTask
     prediction: SemanticMappingPrediction
+    schema_predictions: dict[AsimSchema, SemanticMappingPrediction] = Field(default_factory=dict)
     catalogue_sha256: str
     reference: ReferenceReviewEvidence | None = None
     cluster_notes: str = ""
@@ -72,6 +73,8 @@ class MappingReviewTask(StrictModel):
         excluded = {"review_revision"}
         if self.setup is None:
             excluded.add("setup")  # Keep already prepared bundles readable.
+        if not self.schema_predictions:
+            excluded.add("schema_predictions")  # Keep earlier frozen bundles readable.
         if self.review_revision != _fingerprint(self.model_dump(mode="json", exclude=excluded)):
             raise ValueError(
                 "Mapping review revision does not match the frozen evidence and suggestion"
@@ -81,7 +84,34 @@ class MappingReviewTask(StrictModel):
             or self.prediction.catalogue_revision != self.source_task.catalogue_revision
         ):
             raise ValueError("Suggestion and source task must identify the same case and catalogue")
+        if self.prediction.ranked_schemas:
+            top_schema = self.prediction.ranked_schemas[0].schema_name
+            if (
+                top_schema in self.schema_predictions
+                and self.schema_predictions[top_schema] != self.prediction
+            ):
+                raise ValueError("Top-ranked field suggestions must match the original prediction")
+        for schema, prediction in self.schema_predictions.items():
+            if self.setup is not None and schema not in self.setup.schema_versions:
+                raise ValueError("Field suggestions require a schema available in setup")
+            if (
+                prediction.case_id != self.source_task.case_id
+                or prediction.catalogue_revision != self.source_task.catalogue_revision
+                or prediction.approach != self.prediction.approach
+            ):
+                raise ValueError(
+                    "Schema field suggestions must match the frozen source and approach"
+                )
         return self
+
+
+class SourceSpan(StrictModel):
+    """Reviewer-selected offsets within one frozen representative event."""
+
+    example_index: int = Field(ge=0)
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    text: str = Field(min_length=1)
 
 
 class MappingRow(StrictModel):
@@ -91,6 +121,7 @@ class MappingRow(StrictModel):
     asim_field: str = ""
     transform: Transform = "string"
     constant_value: str = ""
+    source_span: SourceSpan | None = None
 
 
 class MappingReviewDraft(StrictModel):
@@ -162,15 +193,19 @@ def required_mapping_fields(
     ]
 
 
-def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> MappingReviewDraft:
-    prediction = task.prediction
-    schema = prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
-    if task.setup is not None and schema not in task.setup.schema_versions:
-        schema = ""
+def _suggested_rows(
+    task: MappingReviewTask,
+    catalog: AsimCatalog,
+    schema: str,
+    prediction: SemanticMappingPrediction | None,
+) -> list[MappingRow]:
     fields = {field.name: field for field in catalog.fields_for_schema(schema)} if schema else {}
-    roles = {(item.source_kind, item.locator): item.role for item in prediction.source_semantics}
-    rows = []
-    for mapping in prediction.asim_fields:
+    roles = {
+        (item.source_kind, item.locator): item.role
+        for item in (prediction.source_semantics if prediction else [])
+    }
+    rows: list[MappingRow] = []
+    for mapping in prediction.asim_fields if prediction else []:
         if mapping.asim_field in _managed_fields(task):
             continue
         field = fields.get(mapping.asim_field)
@@ -206,6 +241,25 @@ def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> Mapp
                     else "string",
                 )
             )
+    return rows
+
+
+def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> MappingReviewDraft:
+    prediction = task.prediction
+    schema = prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
+    if task.setup is not None and schema not in task.setup.schema_versions:
+        schema = ""
+    suggested_schema = prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
+    available = task.setup.schema_versions if task.setup else ([schema] if schema else [])
+    schema_rows = {
+        name: _suggested_rows(
+            task,
+            catalog,
+            name,
+            prediction if name == suggested_schema else None,
+        )
+        for name in available
+    }
     metadata = task.source_task.input.source_metadata
     return MappingReviewDraft(
         review_revision=task.review_revision,
@@ -216,7 +270,8 @@ def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> Mapp
         product=metadata.product or "",
         source_table=metadata.source_table or "Syslog",
         message_field=metadata.message_field or "SyslogMessage",
-        rows=rows,
+        rows=schema_rows.get(schema, []),
+        schema_rows=schema_rows,
     )
 
 
@@ -293,11 +348,24 @@ def prepare_mapping_review(
             case_id=task.case_id, catalogue_revision=task.catalogue_revision, input=task.input
         )
         prediction = approach.predict(request, catalog)
+        suggested_schema = (
+            prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
+        )
+        schema_predictions = {
+            name: prediction
+            if name == suggested_schema
+            else approach.predict(request.model_copy(update={"review_schema": name}), catalog)
+            for name in setup.schema_versions
+        }
         reference = references.get(task.case_id)
         payload = {
             "mode": "assisted-engineering",
             "source_task": task.model_dump(mode="json"),
             "prediction": prediction.model_dump(mode="json"),
+            "schema_predictions": {
+                name: suggestion.model_dump(mode="json")
+                for name, suggestion in schema_predictions.items()
+            },
             "catalogue_sha256": catalog.manifest.content_sha256,
             "reference": reference.model_dump(mode="json") if reference else None,
             "cluster_notes": notes.get(task.case_id, ""),
@@ -359,6 +427,10 @@ def load_mapping_review(bundle_dir: Path) -> tuple[list[MappingReviewTask], Asim
             or task.catalogue_revision != catalog.manifest.resolved_revision
         ):
             raise ReviewError("Mapping review source or catalogue provenance does not match")
+        for schema, prediction in review.schema_predictions.items():
+            field_names = {field.name for field in catalog.fields_for_schema(schema)}
+            if any(mapping.asim_field not in field_names for mapping in prediction.asim_fields):
+                raise ReviewError(f"Field suggestions do not belong to {schema}")
     return tasks, catalog
 
 
@@ -408,9 +480,35 @@ def validate_mapping_draft(
         field.name
         for field in required_mapping_fields(task, catalog, draft.schema_name, draft.rows)
     }
-    slots = {slot.slot_id for slot in task.source_task.input.parameter_slots}
+    from .potato_bundle import example_slot_spans
+
+    source_input = task.source_task.input
+    slots = {slot.slot_id for slot in source_input.parameter_slots}
+    captures = example_slot_spans(
+        source_input.template, source_input.representative_events, source_input.parameter_slots
+    )
     mappings = []
     for row in draft.rows:
+        if row.source_span is not None:
+            span = row.source_span
+            if span.example_index >= len(source_input.representative_events):
+                raise ReviewError("Selected source span refers to an unknown example")
+            example = source_input.representative_events[span.example_index].text
+            if (
+                span.end > len(example)
+                or span.start >= span.end
+                or example[span.start : span.end] != span.text
+            ):
+                raise ReviewError("Selected source span does not match the frozen example")
+            if row.source_kind != "slot" or not any(
+                capture["slot_id"] == row.locator
+                and capture["start"] == span.start
+                and capture["end"] == span.end
+                for capture in captures[span.example_index]
+            ):
+                raise ReviewError(
+                    "Selected source span is not an extracted slot; mark needs extraction"
+                )
         field = fields.get(row.asim_field)
         if field is None or field.kql_type != row.transform:
             raise ReviewError(f"Unknown target or incompatible conversion: {row.asim_field}")

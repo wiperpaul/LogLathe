@@ -34,7 +34,7 @@ class DirectLexicalApproach:
                 warnings=["No schema had lexical evidence."],
             )
 
-        schema_name = schemas[0].schema_name
+        schema_name = request.review_schema or schemas[0].schema_name
         fields = catalog.fields_for_schema(schema_name)
         predictions: list[PredictedAsimField] = []
         for slot in request.input.parameter_slots:

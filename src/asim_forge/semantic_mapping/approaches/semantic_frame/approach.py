@@ -44,7 +44,7 @@ class SemanticFrameApproach:
                 warnings=["No schema had lexical evidence."],
             )
 
-        fields = catalog.fields_for_schema(schemas[0].schema_name)
+        fields = catalog.fields_for_schema(request.review_schema or schemas[0].schema_name)
         semantics: list[PredictedSourceSemantic] = []
         mappings: list[PredictedAsimField] = []
         oracle_roles = _oracle_roles(request)
