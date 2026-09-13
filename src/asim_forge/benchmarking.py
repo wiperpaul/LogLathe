@@ -230,10 +230,19 @@ def run_benchmarks(
     *,
     catalog_dir: Path | None,
     cache_dir: Path | None = None,
+    local_only: bool = False,
     revision: str = "unknown",
     baseline_path: Path | None = None,
 ) -> BenchmarkReport:
     manifests = load_corpus_manifests(registry)
+    if local_only:
+        manifests = [
+            entry
+            for entry in manifests
+            if all(resource.url.startswith("local:") for resource in entry[1].resources)
+        ]
+        if not manifests:
+            raise BenchmarkError("No local-only corpora are registered")
     needs_catalog = any(manifest.track in SEMANTIC_TRACKS for _, manifest, _ in manifests)
     if needs_catalog and catalog_dir is None:
         raise BenchmarkError("--catalog is required when semantic corpora are selected")

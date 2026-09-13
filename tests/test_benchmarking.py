@@ -99,6 +99,28 @@ def test_checked_corpus_registry_has_separate_objective_tracks() -> None:
     assert all(len(fingerprint) == 64 for _, _, fingerprint in loaded)
 
 
+def test_repository_local_benchmark_uses_no_external_corpus_downloads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected_download(*_args, **_kwargs):
+        raise AssertionError("Local-only benchmark attempted a network download")
+
+    monkeypatch.setattr(benchmarking, "urlopen", unexpected_download)
+    report = run_benchmarks(
+        Path("evaluation/corpora"),
+        tmp_path / "output",
+        catalog_dir=Path("evaluation/ci-catalog"),
+        local_only=True,
+    )
+    assert {corpus.corpus_id for corpus in report.corpora} == {
+        "asim-cef-dev",
+        "asim-semantic-smoke",
+        "loginject-apache-benign-500",
+        "loginject-ssh-benign-500",
+    }
+    assert len(report.results) == 16
+
+
 def test_pairwise_parsing_metrics_distinguish_merges_and_splits() -> None:
     metrics = parsing_metrics([1, 1, 1, 2], ["a", "a", "b", "b"])
 
