@@ -25,6 +25,12 @@ class SlotSpan(TypedDict):
     text: str
 
 
+class LiteralSpan(TypedDict):
+    start: int
+    end: int
+    text: str
+
+
 def write_potato_bundle(
     clusters: list[ParsedCluster],
     output_dir: Path,
@@ -115,40 +121,74 @@ def example_slot_spans(
     template: str, representative_events: list[SourceEvent], parameter_slots: list[ParameterSlot]
 ) -> list[list[SlotSpan]]:
     """Locate existing template captures in examples; never infer a new extraction."""
+    return _example_template_spans(template, representative_events, parameter_slots)[0]
+
+
+def example_literal_spans(
+    template: str, representative_events: list[SourceEvent], parameter_slots: list[ParameterSlot]
+) -> list[list[LiteralSpan]]:
+    """Locate fixed template text using unambiguous, code-point example offsets."""
+    return _example_template_spans(template, representative_events, parameter_slots)[1]
+
+
+def _example_template_spans(
+    template: str, representative_events: list[SourceEvent], parameter_slots: list[ParameterSlot]
+) -> tuple[list[list[SlotSpan]], list[list[LiteralSpan]]]:
     matches = list(_PLACEHOLDER.finditer(template))
     if len(matches) != len(parameter_slots) or any(
         left.end() == right.start() for left, right in zip(matches, matches[1:])
     ):
-        return [[] for _ in representative_events]
-    parts = ["^"]
+        return ([[] for _ in representative_events], [[] for _ in representative_events])
+    parts = []
+    greedy_parts = []
     cursor = 0
     for index, match in enumerate(matches):
-        parts.extend(
-            [
-                re.escape(template[cursor : match.start()]),
-                f"(?P<slot_{index}>.+?)",
-            ]
-        )
+        literal = re.escape(template[cursor : match.start()])
+        parts.extend([literal, f"(?P<slot_{index}>.+?)"])
+        greedy_parts.extend([literal, f"(?P<slot_{index}>.+)"])
         cursor = match.end()
-    parts.extend([re.escape(template[cursor:]), "$"])
+    parts.append(re.escape(template[cursor:]))
+    greedy_parts.append(re.escape(template[cursor:]))
     pattern = re.compile("".join(parts), re.DOTALL)
-    result: list[list[SlotSpan]] = []
+    greedy_pattern = re.compile("".join(greedy_parts), re.DOTALL)
+    slot_results: list[list[SlotSpan]] = []
+    literal_results: list[list[LiteralSpan]] = []
     for event in representative_events:
         found = pattern.fullmatch(event.text)
-        result.append(
-            [
-                SlotSpan(
-                    slot_id=slot.slot_id,
-                    start=found.start(f"slot_{index}"),
-                    end=found.end(f"slot_{index}"),
-                    text=found.group(f"slot_{index}"),
+        greedy_found = greedy_pattern.fullmatch(event.text) if found else None
+        # Lazy and greedy searches give the first and last possible capture
+        # allocations. Different boundaries mean the text cannot be classified
+        # as a literal or a particular slot with confidence.
+        if found is None or greedy_found is None or found.regs != greedy_found.regs:
+            slot_results.append([])
+            literal_results.append([])
+            continue
+        slots = [
+            SlotSpan(
+                slot_id=slot.slot_id,
+                start=found.start(f"slot_{index}"),
+                end=found.end(f"slot_{index}"),
+                text=found.group(f"slot_{index}"),
+            )
+            for index, slot in enumerate(parameter_slots)
+        ]
+        literals = []
+        cursor = 0
+        for slot in slots:
+            if cursor < slot["start"]:
+                literals.append(
+                    LiteralSpan(
+                        start=cursor, end=slot["start"], text=event.text[cursor : slot["start"]]
+                    )
                 )
-                for index, slot in enumerate(parameter_slots)
-            ]
-            if found
-            else []
-        )
-    return result
+            cursor = slot["end"]
+        if cursor < len(event.text):
+            literals.append(
+                LiteralSpan(start=cursor, end=len(event.text), text=event.text[cursor:])
+            )
+        slot_results.append(slots)
+        literal_results.append(literals)
+    return slot_results, literal_results
 
 
 def _potato_config() -> dict[str, object]:
@@ -269,6 +309,9 @@ def write_mapping_potato_bundle(
                 "initial_draft": initial_mapping_draft(task, catalog).model_dump(mode="json"),
                 "catalogue_fields": fields,
                 "example_slot_spans": example_slot_spans(
+                    source.template, source.representative_events, source.parameter_slots
+                ),
+                "example_literal_spans": example_literal_spans(
                     source.template, source.representative_events, source.parameter_slots
                 ),
             }

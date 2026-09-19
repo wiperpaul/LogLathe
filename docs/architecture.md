@@ -115,6 +115,14 @@ Legacy slot mappings remain readable. Compiler output retains the assisted revie
 task, catalogue, cluster, and saved-state provenance. These engineering decisions
 do not enter the independent-label promotion workflow.
 
+Reviewer-selected spans are evidence for a mapping. A slot binding requires the
+exact capture boundaries; a constant binding can retain a selected span wholly
+inside verified literal template text. Shared template alignment identifies
+literal and captured regions, rejecting ambiguous boundaries. Enumerated constant
+outputs are selected from the pinned catalogue and validated before compilation.
+The frozen template scopes constant outputs; unchanged sample values inside a
+capture do not establish a template constant.
+
 ## Schema-ranking boundary
 
 `DeepParseClusterer` owns no schema state. Build orchestration creates a

@@ -24,7 +24,7 @@ from asim_forge.mapping_review import (
     validate_mapping_draft,
 )
 from asim_forge.models import AsimCatalog, FieldMapping, ParameterSlot, SourceEvent
-from asim_forge.potato_bundle import example_slot_spans
+from asim_forge.potato_bundle import example_literal_spans, example_slot_spans
 from asim_forge.reviews import ReviewError, load_review_decisions
 from asim_forge.semantic_mapping.approaches import build_approach
 from asim_forge.semantic_mapping.contracts import MappingRequest
@@ -93,6 +93,7 @@ def test_preparation_keeps_source_queue_blind_and_uses_potato(mapping_bundle):
     assert config["annotation_schemes"][0]["annotation_type"] == "text"
     item = json.loads((bundle / "potato/items.jsonl").read_text("utf-8").splitlines()[0])
     assert "example_slot_spans" in item
+    assert item["example_literal_spans"] == [[{"start": 0, "end": 17, "text": "login failed for "}]]
     assert not (bundle / "potato/annotation_output").exists()
     with pytest.raises(ReviewError, match="empty mapping review"):
         prepare_mapping_review(bundle / "queue", bundle / "catalog", bundle)
@@ -164,6 +165,153 @@ def test_example_spans_only_identify_template_captures():
         [],
     ]
     assert example_slot_spans("<VAR:A><VAR:B>", events, slots) == [[], []]
+
+
+def test_literal_spans_follow_template_boundaries_including_unicode_and_multiline():
+    slots = [ParameterSlot(slot_id="p1", label="user", placeholder="<VAR:USER>", occurrence=1)]
+    events = [
+        SourceEvent(source_file="test", line_number=1, text="🔒 Failed Alice van Smith\nend"),
+        SourceEvent(source_file="test", line_number=2, text="🔒 Failed Bob\nend"),
+    ]
+    template = "🔒 Failed <VAR:USER>\nend"
+    assert example_literal_spans(template, events, slots) == [
+        [
+            {"start": 0, "end": 9, "text": "🔒 Failed "},
+            {"start": 24, "end": 28, "text": "\nend"},
+        ],
+        [
+            {"start": 0, "end": 9, "text": "🔒 Failed "},
+            {"start": 12, "end": 16, "text": "\nend"},
+        ],
+    ]
+    assert example_slot_spans(template, events, slots)[0] == [
+        {"slot_id": "p1", "start": 9, "end": 24, "text": "Alice van Smith"}
+    ]
+    assert example_literal_spans("🔒 Failed", [events[0]], []) == [[]]
+    assert example_literal_spans(
+        "🔒 Failed", [events[0].model_copy(update={"text": "🔒 Failed"})], []
+    ) == [[{"start": 0, "end": 8, "text": "🔒 Failed"}]]
+
+
+@pytest.mark.parametrize(
+    ("template", "text"),
+    [
+        ("<VAR:A><VAR:B>", "first second"),
+        ("before <VAR:A> : <VAR:B> after", "before first : second : third after"),
+        ("before <VAR:A> : <VAR:B> after", "unmatched message"),
+        ("before <VAR:A> after", "before first after"),
+    ],
+)
+def test_unverified_alignment_has_no_literal_or_slot_spans(template, text):
+    slots = [
+        ParameterSlot(slot_id=f"p{index}", label=label, placeholder=f"<VAR:{label}>", occurrence=1)
+        for index, label in enumerate(("A", "B"), start=1)
+    ]
+    events = [SourceEvent(source_file="test", line_number=1, text=text)]
+    assert example_literal_spans(template, events, slots) == [[]]
+    assert example_slot_spans(template, events, slots) == [[]]
+
+
+def test_fixed_template_span_supports_a_catalogue_constant(mapping_bundle):
+    _, task, catalog, _ = mapping_bundle
+    draft = _draft(task, catalog)
+    draft.rows[1].source_span = SourceSpan(example_index=0, start=6, end=12, text="failed")
+    assert validate_mapping_draft(draft, task, catalog)[1] == FieldMapping(
+        constant_value="Failure", asim_field="EventResult", transform="string"
+    )
+    draft.rows[1].constant_value = "Failed"
+    with pytest.raises(ReviewError, match="outside the catalogue values"):
+        validate_mapping_draft(draft, task, catalog)
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_literal_evidence_requires_output_even_for_optional_fields(mapping_bundle, value):
+    _, task, catalog, _ = mapping_bundle
+    draft = _draft(task, catalog)
+    draft.rows[0] = MappingRow(
+        source_kind="constant",
+        asim_field="TargetUsername",
+        constant_value=value,
+        source_span=SourceSpan(example_index=0, start=6, end=12, text="failed"),
+    )
+    with pytest.raises(ReviewError, match="Choose an output value"):
+        validate_mapping_draft(draft, task, catalog)
+    # Preserve existing manually specified empty constants without evidence.
+    draft.rows[0].source_span = None
+    assert validate_mapping_draft(draft, task, catalog)[0].constant_value == value
+
+
+@pytest.mark.parametrize(("start", "end"), [(17, 22), (18, 21), (13, 20)])
+def test_constant_evidence_cannot_use_slots_partial_slots_or_cross_boundaries(
+    mapping_bundle, start, end
+):
+    _, task, catalog, _ = mapping_bundle
+    draft = _draft(task, catalog)
+    text = task.source_task.input.representative_events[0].text
+    draft.rows[1].source_span = SourceSpan(
+        example_index=0, start=start, end=end, text=text[start:end]
+    )
+    with pytest.raises(ReviewError, match="not within verified fixed template text"):
+        validate_mapping_draft(draft, task, catalog)
+
+
+def test_repeated_literal_text_in_a_slot_is_not_constant_evidence(mapping_bundle):
+    _, frozen_task, catalog, _ = mapping_bundle
+    task = frozen_task.model_copy(deep=True)
+    task.source_task.input.representative_events[0].text = "login failed for failed"
+    task.source_task.input.parameter_slots[0].examples = ["failed"]
+    draft = _draft(task, catalog)
+    draft.rows[1].source_span = SourceSpan(example_index=0, start=6, end=12, text="failed")
+    assert validate_mapping_draft(draft, task, catalog)
+    draft.rows[1].source_span = SourceSpan(example_index=0, start=17, end=23, text="failed")
+    with pytest.raises(ReviewError, match="not within verified fixed template text"):
+        validate_mapping_draft(draft, task, catalog)
+
+
+def test_constant_evidence_must_match_the_frozen_example(mapping_bundle):
+    _, task, catalog, _ = mapping_bundle
+    draft = _draft(task, catalog)
+    draft.rows[1].source_span = SourceSpan(example_index=0, start=6, end=12, text="Failed")
+    with pytest.raises(ReviewError, match="does not match the frozen example"):
+        validate_mapping_draft(draft, task, catalog)
+    draft.rows[1].source_span = SourceSpan(example_index=5, start=6, end=12, text="failed")
+    with pytest.raises(ReviewError, match="unknown example"):
+        validate_mapping_draft(draft, task, catalog)
+
+
+def test_source_table_mappings_cannot_use_event_span_evidence(mapping_bundle):
+    _, task, catalog, _ = mapping_bundle
+    draft = _draft(task, catalog)
+    draft.rows[2].source_span = SourceSpan(example_index=0, start=6, end=12, text="failed")
+    with pytest.raises(ReviewError, match="Source-table mappings cannot use"):
+        validate_mapping_draft(draft, task, catalog)
+
+
+def test_approved_literal_mapping_roundtrips_evidence_and_compiles(tmp_path, mapping_bundle):
+    bundle, task, catalog, clusters = mapping_bundle
+    draft = _draft(task, catalog)
+    draft.status = "approved"
+    evidence = SourceSpan(example_index=0, start=6, end=12, text="failed")
+    draft.rows[1].source_span = evidence
+    state = _state(tmp_path / "user_state.json", task, draft)
+    saved_data = json.loads(state.read_bytes())
+    saved_draft = MappingReviewDraft.model_validate_json(
+        saved_data["instance_id_to_label_to_value"][task.source_task.case_id][0][1]
+    )
+    assert saved_draft.rows[1].source_span == evidence
+    decisions = load_mapping_decisions(bundle, state)
+    assert decisions[0].field_mappings[1].constant_value == "Failure"
+    output = tmp_path / "compiled"
+    manifest = compile_reviews(clusters, state, output, mapping_bundle=bundle)
+    assert manifest.compiled_count == 1
+    assert 'EventResult = tostring("Failure")' in next(output.glob("*.kql")).read_text("utf-8")
+    spec = json.loads(next(output.glob("*.parser-spec.json")).read_text("utf-8"))
+    assert spec["template"] == task.source_task.input.template
+    assert (
+        spec["mapping_review"]["review_file_sha256"]
+        == hashlib.sha256(state.read_bytes()).hexdigest()
+    )
+    assert spec["mapping_review"]["review_revision"] == task.review_revision
 
 
 def test_reviewed_span_must_match_frozen_extraction(mapping_bundle):

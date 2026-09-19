@@ -149,14 +149,22 @@ including edits to shared fields.
 
 Select a mapping in the compact list, then select its exact source text in a
 representative event. NER-style highlights show the template's extracted slots
-and their ASIM labels. A matching span assigns that existing slot. If the
-selection falls outside a slot or covers only part of one, the review retains
-the selected text and offsets but cannot approve it as a parser mapping; mark
-**Needs extraction work**. Expand **Template and extracted slots** to assign a
-slot directly when an example cannot be selected. Source-table fields and
-fixed values remain available from the source dropdown for exceptional mappings.
-The selected source span is review evidence, not a new extraction rule; a later
-cluster/extraction change still requires a fresh review bundle.
+and their ASIM labels. A matching span assigns that existing slot. Selecting
+verified fixed template text instead opens **Fixed value for this template** and
+retains the selection as evidence. Choose the ASIM output value, for example
+`Failure` supported by literal `Failed`. Enumerated fields offer the catalogue's
+allowed values in a dropdown. Check the output preview before approval; the
+constant applies to events matching this template.
+
+Every selection keeps its ASIM field label. A selection inside part of a slot,
+across slots, or in ambiguously aligned text remains **Extraction rule needed**;
+mark **Needs extraction work** when a new extraction or value translation is
+required. An unchanged value in the examples is not treated as fixed template
+text. Expand **Template and extracted slots** to assign a slot directly when an
+example cannot be selected. Source-table fields and fixed values remain available
+from the source dropdown. The selected source span is review evidence, not a new
+extraction rule; a later cluster/extraction change still requires a fresh review
+bundle.
 Select ASIM fields from the catalogue dropdown, grouped by requirement class, and
 check their conversions. Setup-owned fields appear in a collapsed section and are
 excluded from the dropdown. Fields requiring unsupported conversions are also
@@ -182,8 +190,9 @@ The mapper's internal source roles are available under suggestion evidence. They
 describe inferred event meaning and are not OCSF fields or an ASIM-to-OCSF mapping.
 Reviewers do not edit that vocabulary; use notes to flag an incorrect interpretation.
 Each mapping can use an extracted slot, a source-table column, or a fixed value.
-Choose **Needs extraction work** when the necessary value is embedded in literal
-text or needs an unsupported derivation; describe the gap in the notes. Choose
+Choose **Needs extraction work** when a variable value lacks an extraction or
+needs an unsupported derivation; describe the gap in the notes. Fixed template
+text can support a constant output without a new extraction. Choose
 **Defer** when evidence or specialist input is needed. **Approve mapping** accepts
 the current mappings; subsequent edits return the task to draft. Use Potato's
 **Next** button to continue. Its progress counter counts saved tasks, including
