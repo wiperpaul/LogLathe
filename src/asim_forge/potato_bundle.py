@@ -287,7 +287,7 @@ def write_mapping_potato_bundle(
     output_dir: Path,
 ) -> None:
     """Use Potato's task-layout extension and its ordinary annotation storage."""
-    from .mapping_review import initial_mapping_draft
+    from .mapping_review import configured_mapping_defaults, initial_mapping_draft
 
     bundle = output_dir / "potato"
     bundle.mkdir()
@@ -307,6 +307,13 @@ def write_mapping_potato_bundle(
                 ),
                 "mapping_task": task.model_dump(mode="json"),
                 "initial_draft": initial_mapping_draft(task, catalog).model_dump(mode="json"),
+                "mapping_defaults_by_schema": {
+                    schema: [
+                        row.model_dump(mode="json")
+                        for row in configured_mapping_defaults(task, catalog, schema)
+                    ]
+                    for schema in (task.setup.schema_versions if task.setup else [])
+                },
                 "catalogue_fields": fields,
                 "example_slot_spans": example_slot_spans(
                     source.template, source.representative_events, source.parameter_slots

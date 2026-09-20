@@ -15,6 +15,7 @@ from .models import (
     ParserSource,
     ParserSpecification,
     ReviewDecision,
+    order_field_mappings,
 )
 from .reviews import ReviewError, load_review_decisions
 
@@ -101,6 +102,11 @@ def _has_parser_review(decision: ReviewDecision) -> bool:
 
 
 def compile_kql(specification: ParserSpecification) -> str:
+    try:
+        mappings = order_field_mappings(specification.field_mappings)
+    except ValueError as exc:
+        raise ReviewError(str(exc)) from exc
+    output_fields = {mapping.asim_field.casefold(): mapping.asim_field for mapping in mappings}
     regex, capture_groups = _capture_regex(specification)
     source = specification.source
     lines = [
@@ -125,7 +131,7 @@ def compile_kql(specification: ParserSpecification) -> str:
     temporary_fields = list(aliases.values())
     for name, alias in aliases.items():
         lines.append(f"    | extend {alias} = {name}")
-    for mapping in specification.field_mappings:
+    for mapping in mappings:
         if mapping.slot_id is not None:
             capture = capture_groups[mapping.slot_id]
             expression = f"_asim_forge_{mapping.slot_id}"
@@ -136,6 +142,8 @@ def compile_kql(specification: ParserSpecification) -> str:
             )
         elif mapping.source_field is not None:
             expression = aliases[mapping.source_field]
+        elif mapping.output_field is not None:
+            expression = output_fields[mapping.output_field.casefold()]
         else:
             value = mapping.constant_value
             expression = (
@@ -232,6 +240,10 @@ def _to_specification(
             f"Review {cluster.cluster_id} maps ASIM fields more than once: "
             + ", ".join(duplicate_fields)
         )
+    try:
+        order_field_mappings(decision.field_mappings)
+    except ValueError as exc:
+        raise ReviewError(str(exc)) from exc
 
     return ParserSpecification(
         parser_name=parser_name,

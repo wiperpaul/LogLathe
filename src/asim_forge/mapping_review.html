@@ -181,6 +181,7 @@
     const exampleLiterals = record.example_literal_spans || [];
     const reference = task.reference;
     const setup = task.setup;
+    const defaultsBySchema = record.mapping_defaults_by_schema || {};
     const configuredSchemas = setup ? Object.keys(setup.schema_versions) : Object.keys(fieldsBySchema);
     draft.cluster_status = draft.cluster_status || 'approved';
     draft.cluster_notes = draft.cluster_notes || '';
@@ -242,6 +243,24 @@
       draft.schema_rows[draft.schema_name] = structuredClone(draft.rows);
     }
     function hasSource(row) { return Boolean((row.source_kind === 'constant' ? row.constant_value : row.locator).trim()); }
+    function setupDefault(row) {
+      return (defaultsBySchema[draft.schema_name] || []).find(item => item.asim_field === row.asim_field);
+    }
+    function isSetupDefault(row) {
+      const value = setupDefault(row);
+      return Boolean(value && !row.source_span && ['source_kind', 'locator', 'transform', 'constant_value'].every(key => row[key] === value[key]));
+    }
+    function outputSource(row) {
+      return draft.rows.find(item => item.asim_field.toLowerCase() === row.locator.toLowerCase());
+    }
+    function outputError(row, seen = new Set()) {
+      if (row.source_kind !== 'output_field') return '';
+      if (seen.has(row.asim_field)) return 'Resolve the circular mapping involving ' + row.asim_field + '.';
+      const producer = outputSource(row);
+      if (!producer || !hasSource(producer)) return 'Complete the mapping for ' + (row.locator || 'the source ASIM field') + ' before using it for ' + row.asim_field + '.';
+      if (producer.transform !== row.transform) return 'Choose a mapped ASIM field with the same conversion as ' + row.asim_field + '.';
+      return outputError(producer, new Set([...seen, row.asim_field]));
+    }
     function literalEvidence(span) {
       return Boolean(span && (exampleLiterals[span.example_index] || []).some(literal =>
         literal.start <= span.start && span.end <= literal.end && span.start < span.end &&
@@ -262,13 +281,13 @@
       }
       if (row.source_kind === 'slot') return capturedEvidence(span)?.slot_id === row.locator ? '' :
         literalEvidence(span) ? 'This is fixed template text. Choose Fixed value for this template and set the ASIM output.' : 'This selection needs an extraction rule before it can produce an output value.';
-      return 'Clear the selected text when using a source-table field.';
+      return 'Clear the selected text when using a source-table or mapped ASIM field.';
     }
     function bindingStatus(row) {
       if (row.source_span && spanError(row)) return literalEvidence(row.source_span) ? 'Choose a fixed output' : 'Extraction rule needed';
       if (row.source_kind === 'constant') return hasSource(row) ? 'Fixed for this template' : 'Choose output value';
       if (row.source_kind === 'slot' && row.locator) return row.locator + ' · extracted span';
-      return {slot: 'Event text span', source_field: 'Source-table field'}[row.source_kind];
+      return {slot: 'Event text span', source_field: 'Source-table field', output_field: 'Follows mapped value'}[row.source_kind];
     }
     function requiredFields() {
       const fields = [...fieldMap().values()];
@@ -380,8 +399,9 @@
       document.getElementById('ll-schema-status').textContent = confirmed ? 'Schema confirmed. Review the fields below.' : 'Assess the suggested schema before reviewing fields.';
       document.getElementById('ll-schema-version').textContent = setup && valid ? 'EventSchemaVersion: ' + setup.schema_versions[draft.schema_name] + ' — supplied automatically from setup.' : 'A version must be available in setup for the selected schema.';
       const suggestedSchema = task.prediction.ranked_schemas[0]?.schema_name;
+      const hasDefaults = (defaultsBySchema[draft.schema_name] || []).length > 0;
       document.getElementById('ll-mapping-origin').textContent = valid && draft.schema_name !== suggestedSchema ?
-        draft.schema_name + ' mappings start with blank required fields. Suggestions are evidence under Schema until you choose to map them.' : '';
+        draft.schema_name + ' mappings start with ' + (hasDefaults ? 'setup defaults and blank remaining required fields' : 'blank required fields') + '. Suggestions are evidence under Schema until you choose to map them.' : '';
       document.getElementById('ll-schema-summary').textContent = (draft.schema_name || 'Choose a schema') + (confirmed ? ' · Confirmed' : ' · Unconfirmed');
       document.getElementById('ll-cluster-summary').textContent = clusterNames[draft.cluster_status];
       document.getElementById('ll-tab-schema').disabled = !clusterApproved;
@@ -520,15 +540,17 @@
       const required = new Set(requiredFields().map(field => field.name));
       const incomplete = draft.rows.filter(row => required.has(row.asim_field) && !hasSource(row)).length;
       document.getElementById('ll-mappings-summary').textContent = incomplete ? incomplete + ' required to fill' : draft.rows.length + ' fields';
-      draft.rows.map((row, index) => ({row, index})).sort((a, b) => Number(required.has(b.row.asim_field)) - Number(required.has(a.row.asim_field))).forEach(({row, index}) => {
+      const priority = row => required.has(row.asim_field) ? hasSource(row) ? 1 : 2 : 0;
+      draft.rows.map((row, index) => ({row, index})).sort((a, b) => priority(b.row) - priority(a.row)).forEach(({row, index}) => {
         const button = element('button', undefined, 'll-mapping-choice'); button.type = 'button';
         button.dataset.mappingIndex = String(index); button.setAttribute('aria-pressed', String(index === activeRow));
         const needsSource = required.has(row.asim_field) && !hasSource(row);
         const evidence = row.source_span?.text;
-        const origin = element('span', row.source_kind === 'constant' && evidence ? evidence + ' → ' + (row.constant_value || 'Choose output') : evidence || (needsSource ? 'Choose source or value' : row.source_kind === 'constant' ? row.constant_value || '(empty)' : row.locator || 'Choose source'));
+        const origin = element('span', row.source_kind === 'constant' && evidence ? evidence + ' → ' + (row.constant_value || 'Choose output') : evidence || (needsSource ? 'Choose source or value' : row.source_kind === 'constant' ? row.constant_value || '(empty)' : row.source_kind === 'output_field' && row.locator ? 'Same as ' + row.locator : row.locator || 'Choose source'));
         origin.append(element('small', bindingStatus(row)));
         const target = element('span', row.asim_field || 'Choose ASIM field');
         if (required.has(row.asim_field)) target.append(element('small', needsSource ? 'Required · Needs value' : 'Required', needsSource ? 'll-required' : ''));
+        if (isSetupDefault(row)) target.append(element('small', 'Setup default'));
         button.append(target, origin);
         button.addEventListener('click', () => activateRow(index)); list.append(button);
       });
@@ -544,18 +566,19 @@
         const card = element('div', undefined, 'll-row'); card.dataset.row = String(index);
         const required = requiredFields().some(field => field.name === row.asim_field);
         const sourceControls = element('div', undefined, 'll-source');
-        const kind = select([['slot', 'Event text span'], ['source_field', 'Source-table field'], ['constant', 'Fixed value for this template']], row.source_kind);
+        const kind = select([['slot', 'Event text span'], ['source_field', 'Source-table field'], ['constant', 'Fixed value for this template'], ['output_field', 'Another mapped ASIM field']], row.source_kind);
         kind.dataset.key = 'source_kind';
         const sample = element('span', undefined, 'll-value');
         sample.dataset.key = 'output_preview'; sample.setAttribute('role', 'status');
         function sampleValue() {
           const slot = slots.get(row.locator);
-          const problem = spanError(row);
+          const problem = spanError(row) || outputError(row);
           const field = fieldMap().get(row.asim_field);
           sample.textContent = problem || (row.source_kind === 'constant' ?
             !hasSource(row) ? 'Choose the ASIM output value for events matching this template.' :
             field?.allowed_values.length && !field.allowed_values.includes(row.constant_value) ? 'Choose an allowed output value: ' + field.allowed_values.join(', ') + '.' :
             'Output: ' + (row.asim_field || 'ASIM field') + ' = ' + JSON.stringify(row.constant_value) + ' for events matching this template.' :
+            row.source_kind === 'output_field' ? 'Uses the mapped ' + row.locator + ' value, including any changes you make to that mapping.' :
             row.source_kind === 'slot' && row.source_span ? 'Matched ' + row.locator + ' in example ' + (row.source_span.example_index + 1) :
             row.source_kind === 'slot' && slot ? 'Extracted slot ' + row.locator + ' · ' + slot.examples.join(', ') :
             row.source_kind === 'source_field' && setup && setup.time_generated === 'ingestion' && row.locator === 'TimeGenerated' ? 'Available after ingestion (setup assumption)' :
@@ -565,7 +588,7 @@
           row.source_kind = kind.value;
           row.locator = kind.value === 'slot' ? capturedEvidence(row.source_span)?.slot_id || '' : '';
           row.constant_value = '';
-          if (kind.value === 'source_field') row.source_span = null;
+          if (['source_field', 'output_field'].includes(kind.value)) row.source_span = null;
           changed(); renderRows();
         });
         sourceControls.append(kind);
@@ -580,17 +603,23 @@
           if (!row.source_span) sourceControls.append(element('span', 'Select the value in the source event above. Use Template and extracted slots if the example cannot be selected.', 'll-value'));
         } else {
           const allowed = row.source_kind === 'constant' ? fieldMap().get(row.asim_field)?.allowed_values || [] : [];
-          const locator = allowed.length ? select([['', 'Choose ASIM output value'], ...allowed], row.constant_value) :
+          const outputs = draft.rows.filter(item => item !== row && item.asim_field && item.transform === row.transform).map(item => item.asim_field);
+          const locator = row.source_kind === 'output_field' ? select([['', 'Choose mapped ASIM field'], ...outputs], row.locator) :
+            allowed.length ? select([['', 'Choose ASIM output value'], ...allowed], row.constant_value) :
             input(row.source_kind === 'constant' ? row.constant_value : row.locator, row.source_kind === 'constant' ? undefined : 'll-sources');
+          if (row.source_kind === 'output_field' && row.locator && !outputs.includes(row.locator)) {
+            const invalid = element('option', row.locator + ' (unavailable)'); invalid.value = row.locator; invalid.disabled = true;
+            locator.append(invalid); locator.value = row.locator;
+          }
           if (allowed.length && row.constant_value && !allowed.includes(row.constant_value)) {
             const invalid = element('option', row.constant_value + ' (not allowed)'); invalid.value = row.constant_value; invalid.disabled = true;
             locator.append(invalid); locator.value = row.constant_value;
           }
           locator.dataset.key = 'source';
-          locator.setAttribute('aria-label', row.source_kind === 'constant' ? 'ASIM output value' : 'Source-table column');
+          locator.setAttribute('aria-label', row.source_kind === 'constant' ? 'ASIM output value' : row.source_kind === 'output_field' ? 'Mapped ASIM field' : 'Source-table column');
           locator.required = required; locator.placeholder = row.source_kind === 'constant' ? 'Enter a fixed value' : 'Choose a source-table column';
           if (required && !hasSource(row)) locator.classList.add('ll-required-input');
-          locator.addEventListener(allowed.length ? 'change' : 'input', () => {
+          locator.addEventListener(allowed.length || row.source_kind === 'output_field' ? 'change' : 'input', () => {
             if (row.source_kind === 'constant') row.constant_value = locator.value;
             else row.locator = locator.value;
             locator.classList.toggle('ll-required-input', required && !hasSource(row)); sampleValue(); changed();
@@ -619,6 +648,11 @@
         });
         conversion.addEventListener('change', () => { row.transform = conversion.value; changed(); });
         card.append(label('ASIM field', target), label('Conversion', conversion), label('Reference output', actual));
+        if (setupDefault(row)) {
+          const reset = element('button', 'Reset to setup default', 'll-remove'); reset.type = 'button'; reset.dataset.key = 'reset_default';
+          reset.addEventListener('click', () => { Object.assign(row, structuredClone(setupDefault(row))); changed(); renderRows(); });
+          card.append(reset);
+        }
         const keepRequired = required && draft.rows.filter(candidate => candidate.asim_field === row.asim_field).length === 1;
         const remove = element('button', keepRequired ? 'Clear this required value' : 'Remove this mapping', 'll-remove'); remove.type = 'button';
         remove.addEventListener('click', () => {
@@ -742,6 +776,9 @@
         } else if (row.source_kind === 'source_field') {
           const ingestionTime = setup && setup.time_generated === 'ingestion' && row.locator === 'TimeGenerated';
           if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(row.locator) || (reference && !(row.locator in reference.source_columns) && !ingestionTime)) return 'Choose a known source-table field for ' + row.asim_field + '.';
+        } else if (row.source_kind === 'output_field') {
+          const problem = outputError(row);
+          if (problem) return problem;
         } else {
           if (field.allowed_values.length && !field.allowed_values.includes(row.constant_value)) return 'Use a catalogue value for ' + row.asim_field + ': ' + field.allowed_values.join(', ');
           if (['int', 'long'].includes(row.transform)) {

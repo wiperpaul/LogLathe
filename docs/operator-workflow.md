@@ -141,9 +141,9 @@ cluster task into a prepared mapping task remains future work.
 First assess and confirm **one schema per template**. Confirmation opens the
 **Mappings** tab. Return to **Schema** to reassess the choice. Changing the schema
 requires confirmation again and loads field suggestions projected against that
-schema's catalogue as evidence in **Schema**. The new schema starts with blank
-required mapping rows, even when suggested fields overlap with the previous
-schema. Select and map any suggested field you agree with. Switching back
+schema's catalogue as evidence in **Schema**. The new schema starts with configured
+defaults and blank remaining required mapping rows, even when suggested fields
+overlap with the previous schema. Select and map any suggested field you agree with. Switching back
 restores the first schema's edits. Each schema's draft is saved independently,
 including edits to shared fields.
 
@@ -189,7 +189,8 @@ LogLathe's layout choice, not a prescribed Potato workflow.
 The mapper's internal source roles are available under suggestion evidence. They
 describe inferred event meaning and are not OCSF fields or an ASIM-to-OCSF mapping.
 Reviewers do not edit that vocabulary; use notes to flag an incorrect interpretation.
-Each mapping can use an extracted slot, a source-table column, or a fixed value.
+Each mapping can use an extracted slot, a source-table column, a fixed value, or
+another mapped ASIM field of the same type.
 Choose **Needs extraction work** when a variable value lacks an extraction or
 needs an unsupported derivation; describe the gap in the notes. Fixed template
 text can support a constant output without a new extraction. Choose
@@ -224,9 +225,37 @@ The column must exist when the query-time parser runs. Azure Monitor documents
 adding a missing `TimeGenerated` to the DCR transformation when creating a custom
 table; verify your actual ingestion setup against that contract.
 ([Custom tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table))
-`EventStartTime` and `EventEndTime` remain mapping requirements: map source event
-times, or explicitly map the available `TimeGenerated` column when the ASIM fallback
-is appropriate.
+The optional `mapping_defaults` list in review setup fills editable rows before
+review. The [OpenSSH setup](../examples/review-setup/openssh.json) uses:
+
+```json
+"mapping_defaults": [
+  {"asim_field": "EventCount", "constant_value": 1, "transform": "int"},
+  {"asim_field": "EventStartTime", "source_field": "TimeGenerated", "transform": "datetime"},
+  {"asim_field": "EventEndTime", "output_field": "EventStartTime", "transform": "datetime"}
+]
+```
+
+These rows are marked **Setup default** and count as filled. Existing explicit
+suggestions take precedence, for example an extracted count in an aggregated
+message. Select a row to override it, or use **Reset to setup default**. Changing
+the start-time mapping also changes the derived end time until the reviewer
+overrides the end-time mapping. The source dropdown offers **Another mapped ASIM
+field** for these dependencies; the compiler evaluates the referenced mapping first.
+
+`source_field` reads the original table column. `output_field` reads another
+mapping's normalized result. Configure a different timestamp column when available,
+or remove an entry to require the reviewer to map that field. Omitting the list or
+using `[]` disables defaults. Changing setup requires a new bundle; existing frozen
+reviews and saved decisions retain their original behavior. Defaults cannot use
+template-specific slot IDs. Preparation checks field names, conversions, constant
+values, and known reference columns. Approval rejects incomplete or circular mapping
+dependencies.
+
+ASIM's [common-field guidance](https://learn.microsoft.com/en-us/azure/sentinel/normalization-common-fields)
+uses `1` for unaggregated events and `TimeGenerated` when start or end timestamps are
+absent. Following start time for the end time is this setup's editable policy;
+records with a distinct end time should override it.
 
 The default `semantic-frame` approach is shared with the evaluation harness.
 `--approach direct-lexical` and `--approach matcher-ensemble` select the other

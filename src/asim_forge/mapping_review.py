@@ -25,6 +25,7 @@ from .models import (
     StrictModel,
     TimeGeneratedMode,
     Transform,
+    order_field_mappings,
 )
 from .reference.evidence import ReferenceReviewEvidence, reference_review_evidence
 from .reviews import ReviewError, _extract_text, load_potato_annotations, load_review_decisions
@@ -51,6 +52,24 @@ class MappingReviewSetup(StrictModel):
         AsimSchema, Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")]
     ] = Field(min_length=1)
     time_generated: TimeGeneratedMode = "map"
+    mapping_defaults: list[FieldMapping] | None = None
+
+    @model_validator(mode="after")
+    def defaults_are_template_independent(self) -> MappingReviewSetup:
+        defaults = self.mapping_defaults or []
+        if any(mapping.slot_id is not None for mapping in defaults):
+            raise ValueError("Setup mapping defaults cannot refer to template-specific slots")
+        targets = [mapping.asim_field.casefold() for mapping in defaults]
+        if len(targets) != len(set(targets)):
+            raise ValueError("Setup mapping defaults must have unique ASIM target fields")
+        return self
+
+
+def _setup_payload(setup: MappingReviewSetup) -> dict[str, object]:
+    # Omit the new optional member to preserve revisions of earlier frozen tasks.
+    return setup.model_dump(
+        mode="json", exclude={"mapping_defaults"} if setup.mapping_defaults is None else set()
+    )
 
 
 def load_mapping_setup(path: Path) -> MappingReviewSetup:
@@ -75,7 +94,10 @@ class MappingReviewTask(StrictModel):
             excluded.add("setup")  # Keep already prepared bundles readable.
         if not self.schema_predictions:
             excluded.add("schema_predictions")  # Keep earlier frozen bundles readable.
-        if self.review_revision != _fingerprint(self.model_dump(mode="json", exclude=excluded)):
+        payload = self.model_dump(mode="json", exclude=excluded)
+        if self.setup is not None:
+            payload["setup"] = _setup_payload(self.setup)
+        if self.review_revision != _fingerprint(payload):
             raise ValueError(
                 "Mapping review revision does not match the frozen evidence and suggestion"
             )
@@ -115,7 +137,7 @@ class SourceSpan(StrictModel):
 
 
 class MappingRow(StrictModel):
-    source_kind: Literal["slot", "source_field", "constant"] = "slot"
+    source_kind: Literal["slot", "source_field", "constant", "output_field"] = "slot"
     locator: str = ""
     role: str = ""
     asim_field: str = ""
@@ -193,6 +215,115 @@ def required_mapping_fields(
     ]
 
 
+def configured_mapping_defaults(
+    task: MappingReviewTask, catalog: AsimCatalog, schema: str
+) -> list[MappingRow]:
+    """Return editable defaults applicable to this schema, checking frozen setup inputs."""
+    if task.setup is None or not task.setup.mapping_defaults:
+        return []
+    fields = {field.name: field for field in catalog.fields_for_schema(schema)}
+    available = {
+        field.name
+        for name in task.setup.schema_versions
+        for field in catalog.fields_for_schema(name)
+    }
+    managed = _managed_fields(task)
+    rows = []
+    for mapping in task.setup.mapping_defaults:
+        target = mapping.asim_field
+        if target not in available:
+            raise ReviewError(
+                f"Setup default target is absent from configured ASIM schemas: {target}"
+            )
+        if target in managed:
+            raise ReviewError(
+                f"Setup default cannot override automatically supplied field: {target}"
+            )
+        field = fields.get(target)
+        if field is None:
+            continue
+        if field.kql_type != mapping.transform:
+            raise ReviewError(f"Setup default has an incompatible conversion for {schema}.{target}")
+        if mapping.source_field is not None:
+            locator = mapping.source_field
+            source_type = (
+                task.reference.source_columns.get(locator) if task.reference is not None else None
+            )
+            ingestion_time = task.setup.time_generated == "ingestion" and locator == "TimeGenerated"
+            if task.reference is not None and source_type is None and not ingestion_time:
+                raise ReviewError(
+                    f"Setup default {target} uses unknown source-table field: {locator}"
+                )
+            if (source_type is not None and source_type != mapping.transform) or (
+                ingestion_time and mapping.transform != "datetime"
+            ):
+                raise ReviewError(
+                    f"Setup default {target} has incompatible source-column type: {locator}"
+                )
+            row = MappingRow(
+                source_kind="source_field",
+                locator=locator,
+                asim_field=target,
+                transform=mapping.transform,
+            )
+        elif mapping.output_field is not None:
+            dependency = next(
+                (
+                    item
+                    for name, item in fields.items()
+                    if name.casefold() == mapping.output_field.casefold()
+                ),
+                None,
+            )
+            if dependency is None or dependency.name in managed:
+                raise ReviewError(
+                    f"Setup default {target} must reference an editable ASIM output field: "
+                    f"{mapping.output_field}"
+                )
+            if dependency.kql_type != mapping.transform:
+                raise ReviewError(
+                    f"Setup default {target} has an incompatible output-field type: "
+                    f"{dependency.name}"
+                )
+            row = MappingRow(
+                source_kind="output_field",
+                locator=dependency.name,
+                asim_field=target,
+                transform=mapping.transform,
+            )
+        else:
+            value = mapping.constant_value
+            row = MappingRow(
+                source_kind="constant",
+                asim_field=target,
+                transform=mapping.transform,
+                constant_value=value if isinstance(value, str) else json.dumps(value),
+            )
+            try:
+                converted = _constant_value(row)
+            except (ValueError, ReviewError) as exc:
+                raise ReviewError(f"Setup default {target} has an invalid constant: {exc}") from exc
+            if field.allowed_values and str(converted) not in field.allowed_values:
+                raise ReviewError(f"Setup default {target} is outside the catalogue values")
+        rows.append(row)
+    # References to fields filled later by the reviewer are valid configuration;
+    # cycles entirely within configured defaults can already be rejected here.
+    dependencies = {
+        row.asim_field.casefold(): row.locator.casefold()
+        for row in rows
+        if row.source_kind == "output_field"
+    }
+    for target in dependencies:
+        seen = set()
+        current = target
+        while current in dependencies:
+            if current in seen:
+                raise ReviewError(f"Setup mapping defaults contain an output-field cycle: {target}")
+            seen.add(current)
+            current = dependencies[current]
+    return rows
+
+
 def _suggested_rows(
     task: MappingReviewTask,
     catalog: AsimCatalog,
@@ -231,6 +362,10 @@ def _suggested_rows(
             )
         )
     represented = {row.asim_field for row in rows}
+    for row in configured_mapping_defaults(task, catalog, schema):
+        if row.asim_field not in represented:
+            rows.append(row)
+            represented.add(row.asim_field)
     for field in required_mapping_fields(task, catalog, schema, rows):
         if field.name not in represented:
             rows.append(
@@ -369,11 +504,14 @@ def prepare_mapping_review(
             "catalogue_sha256": catalog.manifest.content_sha256,
             "reference": reference.model_dump(mode="json") if reference else None,
             "cluster_notes": notes.get(task.case_id, ""),
-            "setup": setup.model_dump(mode="json"),
+            "setup": _setup_payload(setup),
         }
-        reviews.append(
-            MappingReviewTask.model_validate({**payload, "review_revision": _fingerprint(payload)})
+        review = MappingReviewTask.model_validate(
+            {**payload, "review_revision": _fingerprint(payload)}
         )
+        for schema in setup.schema_versions:
+            configured_mapping_defaults(review, catalog, schema)
+        reviews.append(review)
     (output_dir / "queue").mkdir(parents=True)
     (output_dir / "catalog").mkdir()
     for name in ("queue-manifest.json", "tasks.jsonl", "submission-schema.json"):
@@ -431,6 +569,8 @@ def load_mapping_review(bundle_dir: Path) -> tuple[list[MappingReviewTask], Asim
             field_names = {field.name for field in catalog.fields_for_schema(schema)}
             if any(mapping.asim_field not in field_names for mapping in prediction.asim_fields):
                 raise ReviewError(f"Field suggestions do not belong to {schema}")
+        for schema in review.setup.schema_versions if review.setup else []:
+            configured_mapping_defaults(review, catalog, schema)
     return tasks, catalog
 
 
@@ -517,6 +657,8 @@ def validate_mapping_draft(
                     )
             elif row.source_kind == "source_field":
                 raise ReviewError("Source-table mappings cannot use event text span evidence")
+            elif row.source_kind == "output_field":
+                raise ReviewError("ASIM output-field mappings cannot use event text span evidence")
             elif not any(
                 capture["slot_id"] == row.locator
                 and capture["start"] == span.start
@@ -554,6 +696,18 @@ def validate_mapping_draft(
             ):
                 raise ReviewError(f"Unknown source-table field: {row.locator}")
             source["source_field"] = row.locator
+        elif row.source_kind == "output_field":
+            dependency = next(
+                (
+                    item
+                    for name, item in fields.items()
+                    if name.casefold() == row.locator.casefold()
+                ),
+                None,
+            )
+            if dependency is None or dependency.kql_type != row.transform:
+                raise ReviewError(f"Unknown or incompatible ASIM output field: {row.locator}")
+            source["output_field"] = dependency.name
         else:
             value = _constant_value(row)
             if field.allowed_values and str(value) not in field.allowed_values:
@@ -571,6 +725,10 @@ def validate_mapping_draft(
     missing = required - {row.asim_field for row in draft.rows}
     if missing:
         raise ReviewError("Fill the required mappings: " + ", ".join(sorted(missing)))
+    try:
+        order_field_mappings(mappings)
+    except ValueError as exc:
+        raise ReviewError(str(exc)) from exc
     return mappings
 
 
