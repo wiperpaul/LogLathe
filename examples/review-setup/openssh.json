@@ -9,6 +9,7 @@
     {"asim_field": "EventCount", "constant_value": 1, "transform": "int"}
   ],
   "supplied_mappings": [
+    {"asim_field": "Dvc", "source_field": "Computer", "transform": "string"},
     {"asim_field": "EventStartTime", "source_field": "TimeGenerated", "transform": "datetime"},
     {"asim_field": "EventEndTime", "output_field": "EventStartTime", "transform": "datetime"}
   ]

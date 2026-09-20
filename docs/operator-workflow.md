@@ -235,6 +235,7 @@ Review setup separates editable `mapping_defaults` from read-only
     {"asim_field": "EventCount", "constant_value": 1, "transform": "int"}
   ],
   "supplied_mappings": [
+    {"asim_field": "Dvc", "source_field": "Computer", "transform": "string"},
     {"asim_field": "EventStartTime", "source_field": "TimeGenerated", "transform": "datetime"},
     {"asim_field": "EventEndTime", "output_field": "EventStartTime", "transform": "datetime"}
   ]
@@ -244,8 +245,9 @@ Review setup separates editable `mapping_defaults` from read-only
 `EventCount` remains an editable row marked **Setup default**. Existing explicit
 suggestions take precedence, for example an extracted count in an aggregated
 message. Select the row to override it, or use **Reset to setup default**.
-The configured timestamps appear only under **Automatically supplied**, where the
-reviewer can see their sources. They are excluded from the editable target picker
+`Dvc` uses the reporting server's `Computer` column. It and the configured timestamps
+appear only under **Automatically supplied**, where the reviewer can see their
+sources. They are excluded from the editable target picker
 and added from frozen setup during compilation. Supplied mappings take precedence
 over suggestions and cannot be overridden in a template review.
 
