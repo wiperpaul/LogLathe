@@ -480,11 +480,14 @@ def validate_mapping_draft(
         field.name
         for field in required_mapping_fields(task, catalog, draft.schema_name, draft.rows)
     }
-    from .potato_bundle import example_slot_spans
+    from .potato_bundle import example_literal_spans, example_slot_spans
 
     source_input = task.source_task.input
     slots = {slot.slot_id for slot in source_input.parameter_slots}
     captures = example_slot_spans(
+        source_input.template, source_input.representative_events, source_input.parameter_slots
+    )
+    literals = example_literal_spans(
         source_input.template, source_input.representative_events, source_input.parameter_slots
     )
     mappings = []
@@ -500,7 +503,21 @@ def validate_mapping_draft(
                 or example[span.start : span.end] != span.text
             ):
                 raise ReviewError("Selected source span does not match the frozen example")
-            if row.source_kind != "slot" or not any(
+            if row.source_kind == "constant":
+                if not any(
+                    literal["start"] <= span.start and span.end <= literal["end"]
+                    for literal in literals[span.example_index]
+                ):
+                    raise ReviewError(
+                        "Selected constant evidence is not within verified fixed template text"
+                    )
+                if not row.constant_value.strip():
+                    raise ReviewError(
+                        "Choose an output value for the selected fixed template evidence"
+                    )
+            elif row.source_kind == "source_field":
+                raise ReviewError("Source-table mappings cannot use event text span evidence")
+            elif not any(
                 capture["slot_id"] == row.locator
                 and capture["start"] == span.start
                 and capture["end"] == span.end

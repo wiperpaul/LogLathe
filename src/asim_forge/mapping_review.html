@@ -134,6 +134,7 @@
 .ll-source { display: flex; flex-direction: column; gap: .4rem; }
 .ll-value, .ll-caption { font-size: .83rem; opacity: .85; overflow-wrap: anywhere; }
 .ll-value { white-space: pre-wrap; }
+.ll-evidence-clear { align-self: flex-start; border: 0; padding: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; font-size: .8rem; }
 .ll-remove { grid-column: 1 / -1; justify-self: start; border: 0; background: transparent; color: inherit; cursor: pointer; font-size: .85rem; padding: 0; text-decoration: underline; }
 .ll-note { padding: .7rem; margin: .7rem 0; background: var(--secondary, #f4f4f5); border-left: 3px solid var(--ring, #6e56cf); border-radius: 4px; }
 .ll-supplied { margin: .8rem 0; overflow-x: auto; }
@@ -177,6 +178,7 @@
     const fieldsBySchema = record.catalogue_fields;
     const source = task.source_task.input;
     const exampleCaptures = record.example_slot_spans || [];
+    const exampleLiterals = record.example_literal_spans || [];
     const reference = task.reference;
     const setup = task.setup;
     const configuredSchemas = setup ? Object.keys(setup.schema_versions) : Object.keys(fieldsBySchema);
@@ -240,6 +242,34 @@
       draft.schema_rows[draft.schema_name] = structuredClone(draft.rows);
     }
     function hasSource(row) { return Boolean((row.source_kind === 'constant' ? row.constant_value : row.locator).trim()); }
+    function literalEvidence(span) {
+      return Boolean(span && (exampleLiterals[span.example_index] || []).some(literal =>
+        literal.start <= span.start && span.end <= literal.end && span.start < span.end &&
+        Array.from(literal.text).slice(span.start - literal.start, span.end - literal.start).join('') === span.text));
+    }
+    function capturedEvidence(span) {
+      return span && (exampleCaptures[span.example_index] || []).find(capture =>
+        capture.start === span.start && capture.end === span.end && capture.text === span.text);
+    }
+    function spanError(row) {
+      const span = row.source_span;
+      if (!span) return '';
+      const event = source.representative_events[span.example_index];
+      if (!event || span.start < 0 || span.start >= span.end || span.end > Array.from(event.text).length || Array.from(event.text).slice(span.start, span.end).join('') !== span.text) return 'Selected evidence no longer matches the source event. Select the text again.';
+      if (row.source_kind === 'constant') {
+        if (!literalEvidence(span)) return 'This selection is not fixed template text. Select literal evidence for a fixed output, or use an extracted value.';
+        return hasSource(row) ? '' : 'Choose an ASIM output value for the selected fixed text.';
+      }
+      if (row.source_kind === 'slot') return capturedEvidence(span)?.slot_id === row.locator ? '' :
+        literalEvidence(span) ? 'This is fixed template text. Choose Fixed value for this template and set the ASIM output.' : 'This selection needs an extraction rule before it can produce an output value.';
+      return 'Clear the selected text when using a source-table field.';
+    }
+    function bindingStatus(row) {
+      if (row.source_span && spanError(row)) return literalEvidence(row.source_span) ? 'Choose a fixed output' : 'Extraction rule needed';
+      if (row.source_kind === 'constant') return hasSource(row) ? 'Fixed for this template' : 'Choose output value';
+      if (row.source_kind === 'slot' && row.locator) return row.locator + ' · extracted span';
+      return {slot: 'Event text span', source_field: 'Source-table field'}[row.source_kind];
+    }
     function requiredFields() {
       const fields = [...fieldMap().values()];
       const represented = new Set([...managedFields().keys(), ...draft.rows.map(row => row.asim_field), ...fields.filter(field => field.field_class === 'Mandatory').map(field => field.name)]);
@@ -306,7 +336,7 @@
       activeStep = step;
       document.getElementById('ll-template-details').open = step !== 'mappings';
       document.getElementById('ll-example-caption').textContent = step === 'mappings' ?
-        'Select text in the event to source the active ASIM field. Highlighted text is already extracted.' : 'Representative source event';
+        'Select text for the active ASIM field. Select an extracted value or fixed text that supports an ASIM output.' : 'Representative source event';
       steps.forEach((name, index) => {
         const selected = name === step;
         document.getElementById('ll-' + name + '-step').hidden = !selected;
@@ -388,13 +418,14 @@
     function renderExample() {
       const exampleIndex = Number(exampleSelect.value);
       const eventText = examples[exampleIndex]?.text || '';
+      const eventCharacters = Array.from(eventText);
       const captures = exampleCaptures[exampleIndex] || [];
       const selected = draft.rows.filter(row => row.source_span?.example_index === exampleIndex).map(row => ({row, span: row.source_span}));
-      const bounds = [...new Set([0, eventText.length, ...captures.flatMap(span => [span.start, span.end]), ...selected.flatMap(({span}) => [span.start, span.end])])].sort((a, b) => a - b);
+      const bounds = [...new Set([0, eventCharacters.length, ...captures.flatMap(span => [span.start, span.end]), ...selected.flatMap(({span}) => [span.start, span.end])])].sort((a, b) => a - b);
       exampleView.replaceChildren();
       for (let part = 0; part < bounds.length - 1; part++) {
         const start = bounds[part], end = bounds[part + 1];
-        const text = eventText.slice(start, end);
+        const text = eventCharacters.slice(start, end).join('');
         const capture = captures.find(span => span.start <= start && span.end >= end);
         const chosen = selected.find(({span}) => span.start <= start && span.end >= end);
         if (!capture && !chosen) { exampleView.append(document.createTextNode(text)); continue; }
@@ -406,10 +437,13 @@
           mark.title = capture.slot_id + (mapped?.asim_field ? ' → ' + mapped.asim_field : ' · extracted slot');
           mark.dataset.active = String(Boolean(mapped && draft.rows[activeRow] === mapped));
         }
-        if (chosen && !chosen.row.locator) {
-          mark.classList.add('ll-unmatched');
-          if (start === chosen.span.start) mark.dataset.label = 'Needs extraction';
+        if (chosen) {
+          const ready = hasSource(chosen.row) && !spanError(chosen.row);
+          mark.classList.toggle('ll-unmatched', !ready);
+          mark.dataset.mapped = String(ready);
+          if (start === chosen.span.start) mark.dataset.label = chosen.row.asim_field || 'Choose ASIM field';
           else delete mark.dataset.label;
+          mark.title = (chosen.row.asim_field || 'Selected evidence') + ' · ' + bindingStatus(chosen.row);
         }
         if (chosen && draft.rows[activeRow] === chosen.row) mark.dataset.active = 'true';
         exampleView.append(mark);
@@ -417,8 +451,7 @@
       if (!eventText) exampleView.textContent = '';
       const active = draft.rows[activeRow];
       spanStatus.textContent = active?.source_span ?
-        (active.locator ? 'Selected “' + active.source_span.text + '” → ' + active.locator + ' · ' + (active.asim_field || 'choose ASIM field') :
-          'Selected “' + active.source_span.text + '” is outside an extracted slot. Mark this review as needing extraction work.') :
+        'Selected “' + active.source_span.text + '” · ' + (active.asim_field || 'choose ASIM field') + ' · ' + bindingStatus(active) :
         active?.source_kind === 'slot' && active.locator ? 'Using extracted slot ' + active.locator + '. Select its text to verify the boundary.' : '';
     }
     function selectExampleSpan() {
@@ -428,10 +461,12 @@
       const range = selection.getRangeAt(0);
       if (!exampleView.contains(range.startContainer) || !exampleView.contains(range.endContainer)) return;
       const prefix = range.cloneRange(); prefix.selectNodeContents(exampleView); prefix.setEnd(range.startContainer, range.startOffset);
-      const start = prefix.toString().length, end = start + range.toString().length;
-      const exampleIndex = Number(exampleSelect.value), text = examples[exampleIndex].text.slice(start, end);
-      if (!text.trim() || end > examples[exampleIndex].text.length) return;
-      const capture = (exampleCaptures[exampleIndex] || []).find(span => span.start === start && span.end === end && span.text === text);
+      const start = Array.from(prefix.toString()).length, end = start + Array.from(range.toString()).length;
+      const exampleIndex = Number(exampleSelect.value), characters = Array.from(examples[exampleIndex].text);
+      const text = characters.slice(start, end).join('');
+      if (!text.trim() || end > characters.length) return;
+      const span = {example_index: exampleIndex, start, end, text};
+      const capture = capturedEvidence(span);
       const mappedIndex = capture ? draft.rows.findIndex(row => row.source_kind === 'slot' && row.locator === capture.slot_id) : -1;
       if (mappedIndex >= 0 && mappedIndex !== activeRow) {
         selection.removeAllRanges(); activateRow(mappedIndex);
@@ -439,10 +474,13 @@
       }
       if (!draft.rows.length) draft.rows.push({source_kind: 'slot', locator: '', role: '', asim_field: '', transform: 'string', constant_value: '', source_span: null});
       const row = draft.rows[activeRow];
-      row.source_kind = 'slot'; row.locator = capture?.slot_id || ''; row.constant_value = '';
-      row.source_span = {example_index: exampleIndex, start, end, text};
+      const literal = literalEvidence(span);
+      const sameConstant = row.source_kind === 'constant' && row.source_span && ['example_index', 'start', 'end', 'text'].every(key => row.source_span[key] === span[key]);
+      row.source_kind = literal ? 'constant' : 'slot'; row.locator = capture?.slot_id || '';
+      if (!sameConstant) row.constant_value = '';
+      row.source_span = span;
       selection.removeAllRanges(); changed(); renderRows();
-      document.querySelector('#ll-rows [data-key="asim_field"]')?.focus();
+      document.querySelector('#ll-rows [data-key="' + (literal && row.asim_field ? 'source' : 'asim_field') + '"]')?.focus();
     }
     exampleView.addEventListener('mouseup', selectExampleSpan);
     exampleView.addEventListener('keyup', selectExampleSpan);
@@ -486,9 +524,9 @@
         const button = element('button', undefined, 'll-mapping-choice'); button.type = 'button';
         button.dataset.mappingIndex = String(index); button.setAttribute('aria-pressed', String(index === activeRow));
         const needsSource = required.has(row.asim_field) && !hasSource(row);
-        const origin = element('span', row.source_span?.text || (needsSource ? 'Choose source or value' : row.source_kind === 'constant' ? row.constant_value || '(empty)' : row.locator || 'Choose source'));
-        const sample = row.source_kind === 'slot' ? slots.get(row.locator)?.examples[0] : '';
-        origin.append(element('small', row.source_span && !row.locator ? 'Needs extraction' : row.source_span && row.locator ? row.locator + ' · extracted span' : sample || {slot: 'Event text span', source_field: 'Source-table field', constant: 'Fixed value'}[row.source_kind]));
+        const evidence = row.source_span?.text;
+        const origin = element('span', row.source_kind === 'constant' && evidence ? evidence + ' → ' + (row.constant_value || 'Choose output') : evidence || (needsSource ? 'Choose source or value' : row.source_kind === 'constant' ? row.constant_value || '(empty)' : row.locator || 'Choose source'));
+        origin.append(element('small', bindingStatus(row)));
         const target = element('span', row.asim_field || 'Choose ASIM field');
         if (required.has(row.asim_field)) target.append(element('small', needsSource ? 'Required · Needs value' : 'Required', needsSource ? 'll-required' : ''));
         button.append(target, origin);
@@ -506,28 +544,53 @@
         const card = element('div', undefined, 'll-row'); card.dataset.row = String(index);
         const required = requiredFields().some(field => field.name === row.asim_field);
         const sourceControls = element('div', undefined, 'll-source');
-        const kind = select([['slot', 'Event text span'], ['source_field', 'Source-table field'], ['constant', 'Fixed value']], row.source_kind);
+        const kind = select([['slot', 'Event text span'], ['source_field', 'Source-table field'], ['constant', 'Fixed value for this template']], row.source_kind);
         kind.dataset.key = 'source_kind';
         const sample = element('span', undefined, 'll-value');
+        sample.dataset.key = 'output_preview'; sample.setAttribute('role', 'status');
         function sampleValue() {
           const slot = slots.get(row.locator);
-          sample.textContent = row.source_kind === 'slot' && row.source_span ? (slot ? 'Matched ' + row.locator + ' in example ' + (row.source_span.example_index + 1) : 'No extracted slot has these exact boundaries; mark Needs extraction work.') :
+          const problem = spanError(row);
+          const field = fieldMap().get(row.asim_field);
+          sample.textContent = problem || (row.source_kind === 'constant' ?
+            !hasSource(row) ? 'Choose the ASIM output value for events matching this template.' :
+            field?.allowed_values.length && !field.allowed_values.includes(row.constant_value) ? 'Choose an allowed output value: ' + field.allowed_values.join(', ') + '.' :
+            'Output: ' + (row.asim_field || 'ASIM field') + ' = ' + JSON.stringify(row.constant_value) + ' for events matching this template.' :
+            row.source_kind === 'slot' && row.source_span ? 'Matched ' + row.locator + ' in example ' + (row.source_span.example_index + 1) :
             row.source_kind === 'slot' && slot ? 'Extracted slot ' + row.locator + ' · ' + slot.examples.join(', ') :
             row.source_kind === 'source_field' && setup && setup.time_generated === 'ingestion' && row.locator === 'TimeGenerated' ? 'Available after ingestion (setup assumption)' :
-            row.source_kind === 'source_field' && reference ? reference.examples.map(example => String(example.source_values[row.locator] ?? '')).join(', ') : '';
+            row.source_kind === 'source_field' && reference ? reference.examples.map(example => String(example.source_values[row.locator] ?? '')).join(', ') : '');
         }
         kind.addEventListener('change', () => {
-          row.source_kind = kind.value; row.locator = ''; row.constant_value = ''; row.source_span = null; changed(); renderRows();
+          row.source_kind = kind.value;
+          row.locator = kind.value === 'slot' ? capturedEvidence(row.source_span)?.slot_id || '' : '';
+          row.constant_value = '';
+          if (kind.value === 'source_field') row.source_span = null;
+          changed(); renderRows();
         });
         sourceControls.append(kind);
+        if (row.source_span) {
+          sourceControls.append(element('span', 'Evidence: “' + row.source_span.text + '”' + (literalEvidence(row.source_span) ? ' · fixed template text' : ''), 'll-value'));
+          const clear = element('button', 'Clear selected evidence', 'll-evidence-clear'); clear.type = 'button';
+          clear.dataset.key = 'clear_evidence';
+          clear.addEventListener('click', () => { row.source_span = null; changed(); renderRows(); });
+          sourceControls.append(clear);
+        }
         if (row.source_kind === 'slot') {
-          sourceControls.append(element('span', row.source_span ? 'Selected “' + row.source_span.text + '”' : 'Select the value in the source event above. Use Template and extracted slots if the example cannot be selected.', 'll-value'));
+          if (!row.source_span) sourceControls.append(element('span', 'Select the value in the source event above. Use Template and extracted slots if the example cannot be selected.', 'll-value'));
         } else {
-          const locator = input(row.source_kind === 'constant' ? row.constant_value : row.locator, row.source_kind === 'constant' ? undefined : 'll-sources');
+          const allowed = row.source_kind === 'constant' ? fieldMap().get(row.asim_field)?.allowed_values || [] : [];
+          const locator = allowed.length ? select([['', 'Choose ASIM output value'], ...allowed], row.constant_value) :
+            input(row.source_kind === 'constant' ? row.constant_value : row.locator, row.source_kind === 'constant' ? undefined : 'll-sources');
+          if (allowed.length && row.constant_value && !allowed.includes(row.constant_value)) {
+            const invalid = element('option', row.constant_value + ' (not allowed)'); invalid.value = row.constant_value; invalid.disabled = true;
+            locator.append(invalid); locator.value = row.constant_value;
+          }
           locator.dataset.key = 'source';
+          locator.setAttribute('aria-label', row.source_kind === 'constant' ? 'ASIM output value' : 'Source-table column');
           locator.required = required; locator.placeholder = row.source_kind === 'constant' ? 'Enter a fixed value' : 'Choose a source-table column';
           if (required && !hasSource(row)) locator.classList.add('ll-required-input');
-          locator.addEventListener('input', () => {
+          locator.addEventListener(allowed.length ? 'change' : 'input', () => {
             if (row.source_kind === 'constant') row.constant_value = locator.value;
             else row.locator = locator.value;
             locator.classList.toggle('ll-required-input', required && !hasSource(row)); sampleValue(); changed();
@@ -660,10 +723,13 @@
       const missing = draft.rows.findIndex(row => required.has(row.asim_field) && !hasSource(row));
       if (missing >= 0) {
         activateRow(missing); document.querySelector('#ll-rows [data-key="source_kind"]')?.focus();
-        return draft.rows[missing].source_span ? 'The selected text for ' + draft.rows[missing].asim_field + ' is not an extracted slot. Mark Needs extraction work.' : 'Select a source span or value for ' + draft.rows[missing].asim_field + '.';
+        const row = draft.rows[missing];
+        return spanError(row) || (row.source_kind === 'constant' ? 'Choose an ASIM output value for ' + row.asim_field + '.' : 'Select a source span or value for ' + row.asim_field + '.');
       }
       const targets = new Set(), assigned = new Set();
       for (const row of draft.rows) {
+        const evidenceProblem = spanError(row);
+        if (evidenceProblem) return evidenceProblem;
         const field = fieldMap().get(row.asim_field);
         if (!field || field.kql_type !== row.transform) return 'Check the target field and conversion for ' + (row.asim_field || 'the incomplete row') + '.';
         if (managedFields().has(row.asim_field)) return row.asim_field + ' is supplied by setup or the platform.';
