@@ -3,13 +3,17 @@ from pathlib import Path
 
 import pytest
 
-from asim_forge.compiler import compile_reviews
+from asim_forge.compiler import compile_kql, compile_reviews
 from asim_forge.models import (
     ClusterRecord,
+    FieldMapping,
     ParameterSlot,
+    ParserSource,
+    ParserSpecification,
     SchemaScore,
     SchemaSuggestion,
     SourceEvent,
+    order_field_mappings,
 )
 from asim_forge.reviews import ReviewError
 
@@ -158,3 +162,140 @@ def test_source_columns_are_captured_before_targets_overwrite_them(tmp_path: Pat
     assert "Flag = tobool(false)" in kql
     assert "EventCount = toint(0)" in kql
     assert "project-away _asim_forge_source_1, _asim_forge_source_2, _asim_forge_source_3" in kql
+
+
+def _specification(mappings: list[FieldMapping]) -> ParserSpecification:
+    return ParserSpecification(
+        parser_name="vimDemoAuth",
+        cluster_id="cluster-auth",
+        schema_name="Authentication",
+        template="Login at <VAR:TIMESTAMP>",
+        source=ParserSource(
+            vendor="Demo", product="Gateway", table="Syslog", message_field="SyslogMessage"
+        ),
+        field_mappings=mappings,
+        reviewer="alice",
+    )
+
+
+@pytest.mark.parametrize(
+    ("start_source", "expected_expression"),
+    [
+        ({"source_field": "TimeGenerated"}, "_asim_forge_source_1"),
+        ({"source_field": "SourceTimestamp"}, "_asim_forge_source_1"),
+        ({"slot_id": "p1"}, "_asim_forge_p1"),
+        ({"constant_value": "2026-09-20T12:00:00Z"}, '"2026-09-20T12:00:00Z"'),
+    ],
+)
+def test_end_time_uses_normalized_start_time_after_its_mapping(
+    start_source: dict[str, str], expected_expression: str
+) -> None:
+    specification = _specification(
+        [
+            FieldMapping(
+                output_field="eventstarttime", asim_field="EventEndTime", transform="datetime"
+            ),
+            FieldMapping(constant_value=1, asim_field="EventCount", transform="int"),
+            FieldMapping.model_validate(
+                {**start_source, "asim_field": "EventStartTime", "transform": "datetime"}
+            ),
+            FieldMapping(
+                source_field="EventStartTime", asim_field="OriginalStartTime", transform="datetime"
+            ),
+        ]
+    )
+
+    kql = compile_kql(specification)
+
+    start_assignment = f"EventStartTime = todatetime({expected_expression})"
+    end_assignment = "EventEndTime = todatetime(EventStartTime)"
+    assert start_assignment in kql
+    assert kql.index(start_assignment) < kql.index(end_assignment)
+    source_snapshot = kql.index(" = EventStartTime\n")
+    assert source_snapshot < kql.index(start_assignment)
+    assert "OriginalStartTime = todatetime(_asim_forge_source_" in kql
+    assert "EventCount = toint(1)" in kql
+    assert specification.field_mappings[0].asim_field == "EventEndTime"
+
+
+def test_orders_output_mapping_chains_stably_without_changing_input() -> None:
+    mappings = [
+        FieldMapping(output_field="Middle", asim_field="Last"),
+        FieldMapping(constant_value="independent", asim_field="Independent"),
+        FieldMapping(output_field="First", asim_field="Middle"),
+        FieldMapping(source_field="Input", asim_field="First"),
+    ]
+
+    ordered = order_field_mappings(mappings)
+
+    assert [mapping.asim_field for mapping in ordered] == ["Independent", "First", "Middle", "Last"]
+    assert mappings[0].asim_field == "Last"
+    assert ordered[0] is mappings[1]
+    kql = compile_kql(_specification(mappings))
+    assert kql.index("First = tostring(") < kql.index("Middle = tostring(First)")
+    assert kql.index("Middle = tostring(First)") < kql.index("Last = tostring(Middle)")
+
+
+@pytest.mark.parametrize(
+    ("mappings", "error"),
+    [
+        ([FieldMapping(output_field="Missing", asim_field="EventEndTime")], "unmapped output"),
+        ([FieldMapping(output_field="EVENTENDTIME", asim_field="EventEndTime")], "own output"),
+        (
+            [
+                FieldMapping(output_field="EventStartTime", asim_field="EventEndTime"),
+                FieldMapping(output_field="EventEndTime", asim_field="EventStartTime"),
+            ],
+            "dependency cycle",
+        ),
+        (
+            [
+                FieldMapping(constant_value=1, asim_field="EventCount"),
+                FieldMapping(constant_value=2, asim_field="eventcount"),
+            ],
+            "more than once",
+        ),
+    ],
+)
+def test_output_dependencies_are_validated_for_direct_compilation(
+    mappings: list[FieldMapping], error: str
+) -> None:
+    with pytest.raises(ValueError, match=error):
+        order_field_mappings(mappings)
+    with pytest.raises(ReviewError, match=error):
+        compile_kql(_specification(mappings))
+
+
+def test_invalid_output_dependency_is_rejected_before_writing_a_specification(
+    tmp_path: Path,
+) -> None:
+    clusters = tmp_path / "clusters.jsonl"
+    cluster = _write_cluster(clusters)
+    review = _review(cluster.cluster_id)
+    review["field_mappings"] = [
+        {"output_field": "EventStartTime", "asim_field": "EventEndTime", "transform": "datetime"}
+    ]
+    state = tmp_path / "reviews.jsonl"
+    state.write_text(json.dumps(review) + "\n", encoding="utf-8")
+    output = tmp_path / "compiled"
+
+    with pytest.raises(ReviewError, match="unmapped output: EventStartTime"):
+        compile_reviews(clusters, state, output)
+
+    assert list(output.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "extra_source",
+    [{"slot_id": "p1"}, {"source_field": "TimeGenerated"}, {"constant_value": 1}],
+)
+def test_output_mapping_is_an_exclusive_source(extra_source: dict[str, str | int]) -> None:
+    with pytest.raises(ValueError, match="exactly one"):
+        FieldMapping.model_validate(
+            {**extra_source, "output_field": "EventStartTime", "asim_field": "EventEndTime"}
+        )
+
+
+def test_output_mapping_name_must_be_an_identifier() -> None:
+    with pytest.raises(ValueError):
+        FieldMapping(output_field="EventStartTime | take 1", asim_field="EventEndTime")

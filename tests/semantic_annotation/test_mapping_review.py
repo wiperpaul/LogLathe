@@ -9,13 +9,15 @@ import yaml
 from pydantic import ValidationError
 
 from asim_forge.cli import main
-from asim_forge.compiler import compile_reviews
+from asim_forge.compiler import compile_kql, compile_reviews
 from asim_forge.mapping_review import (
     MappingReviewDraft,
     MappingReviewSetup,
     MappingReviewTask,
     MappingRow,
     SourceSpan,
+    configured_mapping_defaults,
+    configured_supplied_mappings,
     initial_mapping_draft,
     load_mapping_decisions,
     load_mapping_review,
@@ -23,11 +25,20 @@ from asim_forge.mapping_review import (
     required_mapping_fields,
     validate_mapping_draft,
 )
-from asim_forge.models import AsimCatalog, FieldMapping, ParameterSlot, SourceEvent
+from asim_forge.models import (
+    AsimCatalog,
+    AsimCatalogField,
+    FieldMapping,
+    ParameterSlot,
+    ParserSource,
+    ParserSpecification,
+    SourceEvent,
+)
 from asim_forge.potato_bundle import example_literal_spans, example_slot_spans
+from asim_forge.reference.evidence import ReferenceReviewEvidence
 from asim_forge.reviews import ReviewError, load_review_decisions
 from asim_forge.semantic_mapping.approaches import build_approach
-from asim_forge.semantic_mapping.contracts import MappingRequest
+from asim_forge.semantic_mapping.contracts import MappingRequest, PredictedAsimField
 
 
 @pytest.fixture
@@ -706,3 +717,464 @@ def test_inactive_schema_rows_are_saved_but_never_compiled(tmp_path, mapping_bun
         task.source_task.case_id
     ][0][1]
     assert MappingReviewDraft.model_validate_json(saved).schema_rows == draft.schema_rows
+
+
+def _timing_defaults() -> list[FieldMapping]:
+    return [
+        FieldMapping(asim_field="EventCount", constant_value=1, transform="int"),
+        FieldMapping(
+            asim_field="EventStartTime", source_field="TimeGenerated", transform="datetime"
+        ),
+        FieldMapping(
+            asim_field="EventEndTime", output_field="EventStartTime", transform="datetime"
+        ),
+    ]
+
+
+@pytest.fixture
+def default_task(mapping_bundle):
+    _, task, catalog, _ = mapping_bundle
+    task = task.model_copy(deep=True)
+    catalog = catalog.model_copy(deep=True)
+    for name in ("EventStartTime", "EventEndTime"):
+        catalog.fields.append(
+            AsimCatalogField(
+                name=name, schema_name="Common", kql_type="datetime", field_class="Mandatory"
+            )
+        )
+    assert task.setup is not None
+    task.setup.mapping_defaults = _timing_defaults()
+    task.reference = ReferenceReviewEvidence(
+        capture_sha256="0" * 64,
+        schema_name="Authentication",
+        schema_version="0.1.3",
+        source_columns={"TimeGenerated": "datetime", "ObservedTime": "datetime", "Count": "int"},
+        examples=[],
+        issues=[],
+    )
+    return task, catalog
+
+
+def test_configured_defaults_seed_each_schema_and_leave_unconfigured_fields_blank(default_task):
+    task, catalog = default_task
+    draft = initial_mapping_draft(task, catalog)
+    for rows in draft.schema_rows.values():
+        by_field = {row.asim_field: row for row in rows}
+        assert by_field["EventCount"].constant_value == "1"
+        assert by_field["EventStartTime"].source_kind == "source_field"
+        assert by_field["EventStartTime"].locator == "TimeGenerated"
+        assert by_field["EventEndTime"].source_kind == "output_field"
+        assert by_field["EventEndTime"].locator == "EventStartTime"
+    # The setup snapshot supplies reset values without sharing editable row state.
+    draft.schema_rows["Authentication"][-1].locator = "changed"
+    defaults = configured_mapping_defaults(task, catalog, "Authentication")
+    assert defaults[-1].locator == "EventStartTime"
+    assert draft.schema_rows["NetworkSession"][-1].locator == "EventStartTime"
+
+
+def test_explicit_count_prediction_wins_over_setup_default(default_task):
+    task, catalog = default_task
+    task.prediction.asim_fields.append(
+        PredictedAsimField(
+            source_kind="slot",
+            locator="p1",
+            asim_field="EventCount",
+            score=1,
+            ranked_candidates=[{"asim_field": "EventCount", "score": 1}],
+        )
+    )
+    draft = initial_mapping_draft(task, catalog)
+    count = next(row for row in draft.rows if row.asim_field == "EventCount")
+    assert count.source_kind == "slot"
+    assert count.locator == "p1"
+    assert count.constant_value == ""
+
+
+def test_review_can_override_start_and_count_while_end_follows_normalized_start(default_task):
+    task, catalog = default_task
+    draft = _draft(task, catalog)
+    draft.rows.extend(configured_mapping_defaults(task, catalog, "Authentication")[1:])
+    start = next(row for row in draft.rows if row.asim_field == "EventStartTime")
+    start.locator = "ObservedTime"
+    draft.rows.reverse()  # End may appear before its producer in the reviewer layout.
+    mappings = {
+        mapping.asim_field: mapping for mapping in validate_mapping_draft(draft, task, catalog)
+    }
+    assert mappings["EventCount"].source_field == "Count"
+    assert mappings["EventStartTime"].source_field == "ObservedTime"
+    assert mappings["EventEndTime"].output_field == "EventStartTime"
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("EventEndTime", "own output"),
+        ("EventResult", "incompatible ASIM output"),
+        ("MissingTimestamp", "Unknown or incompatible ASIM output"),
+    ],
+)
+def test_invalid_normalized_output_dependencies_are_rejected(default_task, source, message):
+    task, catalog = default_task
+    draft = _draft(task, catalog)
+    draft.rows.extend(configured_mapping_defaults(task, catalog, "Authentication")[1:])
+    draft.rows[-1].locator = source
+    with pytest.raises(ReviewError, match=message):
+        validate_mapping_draft(draft, task, catalog)
+
+
+def test_output_dependency_needs_a_populated_mapping_not_just_a_catalogue_field(default_task):
+    task, catalog = default_task
+    catalog.fields.append(
+        AsimCatalogField(
+            name="OtherTime",
+            schema_name="Authentication",
+            kql_type="datetime",
+            field_class="Optional",
+        )
+    )
+    draft = _draft(task, catalog)
+    draft.rows.extend(configured_mapping_defaults(task, catalog, "Authentication")[1:])
+    draft.rows[-1].locator = "OtherTime"
+    with pytest.raises(ReviewError, match="unmapped output"):
+        validate_mapping_draft(draft, task, catalog)
+    draft.rows[-1].locator = "EventStartTime"
+    draft.rows[-2].source_kind = "output_field"
+    draft.rows[-2].locator = "EventEndTime"
+    with pytest.raises(ReviewError, match="dependency cycle"):
+        validate_mapping_draft(draft, task, catalog)
+
+
+def test_output_mapping_rejects_text_span_evidence(default_task):
+    task, catalog = default_task
+    draft = _draft(task, catalog)
+    draft.rows.extend(configured_mapping_defaults(task, catalog, "Authentication")[1:])
+    draft.rows[-1].source_span = SourceSpan(example_index=0, start=6, end=12, text="failed")
+    with pytest.raises(ReviewError, match="output-field mappings cannot use"):
+        validate_mapping_draft(draft, task, catalog)
+
+
+@pytest.mark.parametrize(
+    ("mapping", "message"),
+    [
+        ({"asim_field": "NoSuchField", "constant_value": "x"}, "absent from configured"),
+        ({"asim_field": "EventCount", "constant_value": 1}, "incompatible conversion"),
+        ({"asim_field": "EventResult", "constant_value": "Failed"}, "outside the catalogue"),
+        (
+            {"asim_field": "EventCount", "constant_value": "banana", "transform": "int"},
+            "invalid constant",
+        ),
+        (
+            {
+                "asim_field": "EventStartTime",
+                "source_field": "MissingColumn",
+                "transform": "datetime",
+            },
+            "unknown source-table",
+        ),
+        (
+            {"asim_field": "EventStartTime", "source_field": "Count", "transform": "datetime"},
+            "incompatible source-column",
+        ),
+        (
+            {"asim_field": "EventEndTime", "output_field": "EventCount", "transform": "datetime"},
+            "incompatible output-field",
+        ),
+        (
+            {"asim_field": "EventEndTime", "output_field": "MissingTime", "transform": "datetime"},
+            "mapped ASIM output",
+        ),
+        (
+            {"asim_field": "EventEndTime", "output_field": "EventEndTime", "transform": "datetime"},
+            "output-field cycle",
+        ),
+    ],
+)
+def test_invalid_configured_defaults_fail_with_target_context(default_task, mapping, message):
+    task, catalog = default_task
+    assert task.setup is not None
+    task.setup.mapping_defaults = [FieldMapping.model_validate(mapping)]
+    with pytest.raises(ReviewError, match=message):
+        configured_mapping_defaults(task, catalog, "Authentication")
+
+
+def test_defaults_cannot_override_managed_metadata(default_task):
+    task, catalog = default_task
+    catalog.fields.append(
+        AsimCatalogField(
+            name="EventSchema", schema_name="Common", kql_type="string", field_class="Mandatory"
+        )
+    )
+    assert task.setup is not None
+    task.setup.mapping_defaults = [
+        FieldMapping(asim_field="EventSchema", constant_value="Authentication")
+    ]
+    with pytest.raises(ReviewError, match="automatically supplied"):
+        configured_mapping_defaults(task, catalog, "Authentication")
+
+
+def test_configured_output_defaults_reject_cycles_but_allow_later_reviewer_values(default_task):
+    task, catalog = default_task
+    assert task.setup is not None
+    task.setup.mapping_defaults = [_timing_defaults()[-1]]
+    assert (
+        configured_mapping_defaults(task, catalog, "Authentication")[0].locator == "EventStartTime"
+    )
+    task.setup.mapping_defaults.append(
+        FieldMapping(asim_field="EventStartTime", output_field="EventEndTime", transform="datetime")
+    )
+    with pytest.raises(ReviewError, match="output-field cycle"):
+        configured_mapping_defaults(task, catalog, "Authentication")
+
+
+def test_ingestion_timestamp_default_can_reference_future_source_column(default_task):
+    task, catalog = default_task
+    assert task.setup is not None and task.reference is not None
+    task.setup.time_generated = "ingestion"
+    del task.reference.source_columns["TimeGenerated"]
+    assert (
+        configured_mapping_defaults(task, catalog, "Authentication")[1].locator == "TimeGenerated"
+    )
+    task.setup.time_generated = "source"
+    with pytest.raises(ReviewError, match="unknown source-table field: TimeGenerated"):
+        configured_mapping_defaults(task, catalog, "Authentication")
+
+
+def test_schema_specific_default_is_only_seeded_where_target_exists(default_task):
+    task, catalog = default_task
+    assert task.setup is not None
+    task.setup.mapping_defaults = [FieldMapping(asim_field="EventResult", constant_value="Failure")]
+    assert (
+        configured_mapping_defaults(task, catalog, "Authentication")[0].constant_value == "Failure"
+    )
+    assert configured_mapping_defaults(task, catalog, "NetworkSession") == []
+
+
+@pytest.mark.parametrize(
+    ("defaults", "message"),
+    [
+        (
+            [{"asim_field": "EventCount", "slot_id": "p1", "transform": "int"}],
+            "template-specific slots",
+        ),
+        (
+            [
+                {"asim_field": "EventCount", "constant_value": 1},
+                {"asim_field": "eventcount", "constant_value": 2},
+            ],
+            "unique ASIM target",
+        ),
+    ],
+)
+def test_setup_rejects_unusable_default_sources_and_duplicate_targets(defaults, message):
+    with pytest.raises(ValidationError, match=message):
+        MappingReviewSetup(schema_versions={"Authentication": "0.1.3"}, mapping_defaults=defaults)
+
+
+def test_preparation_validates_defaults_and_preserves_them_in_frozen_tasks(
+    tmp_path, annotation_queue
+):
+    catalog_dir, catalog, queue_dir, _, _ = annotation_queue
+    setup = MappingReviewSetup(
+        schema_versions={"Authentication": "0.1.3"},
+        mapping_defaults=[FieldMapping(asim_field="EventCount", constant_value=1, transform="int")],
+    )
+    bundle = tmp_path / "with-defaults"
+    prepare_mapping_review(queue_dir, catalog_dir, bundle, setup=setup)
+    tasks, _ = load_mapping_review(bundle)
+    assert tasks[0].setup == setup
+    changed = tasks[0].model_dump(mode="json")
+    changed["setup"]["mapping_defaults"][0]["constant_value"] = 2
+    with pytest.raises(ValidationError, match="revision does not match"):
+        MappingReviewTask.model_validate(changed)
+    count = next(
+        row
+        for row in initial_mapping_draft(tasks[0], catalog).rows
+        if row.asim_field == "EventCount"
+    )
+    assert count.constant_value == "1"
+    invalid_setup = setup.model_copy(
+        update={"mapping_defaults": [FieldMapping(asim_field="UnknownField", constant_value=1)]}
+    )
+    invalid_bundle = tmp_path / "invalid-defaults"
+    with pytest.raises(ReviewError, match="UnknownField"):
+        prepare_mapping_review(queue_dir, catalog_dir, invalid_bundle, setup=invalid_setup)
+    assert not invalid_bundle.exists()
+
+
+def test_pre_defaults_frozen_revision_and_bundle_remain_readable(mapping_bundle):
+    bundle, task, _, _ = mapping_bundle
+    payload = task.model_dump(mode="json", exclude={"review_revision"})
+    payload["setup"].pop("mapping_defaults", None)
+    payload["setup"].pop("supplied_mappings", None)
+    old_revision = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()
+    ).hexdigest()
+    payload["review_revision"] = old_revision
+    assert old_revision == task.review_revision
+    restored = MappingReviewTask.model_validate(payload)
+    assert restored.setup is not None and restored.setup.mapping_defaults is None
+    # Make the frozen record truly omit the new member, as an existing bundle does.
+    suggestions = bundle / "suggestions.jsonl"
+    suggestions.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    manifest_path = bundle / "review-manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest["files"]["suggestions.jsonl"] = hashlib.sha256(suggestions.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert load_mapping_review(bundle)[0][0] == restored
+
+
+def test_supplied_timestamps_leave_review_rows_and_compile_from_setup(default_task):
+    task, catalog = default_task
+    assert task.setup is not None
+    task.setup.mapping_defaults = _timing_defaults()[:1]
+    task.setup.supplied_mappings = _timing_defaults()[1:]
+    # A prediction cannot override the configured timestamp policy.
+    task.prediction.asim_fields.append(
+        PredictedAsimField(
+            source_kind="slot",
+            locator="p1",
+            asim_field="EventStartTime",
+            score=1,
+            ranked_candidates=[{"asim_field": "EventStartTime", "score": 1}],
+        )
+    )
+    timestamps = {"EventStartTime", "EventEndTime"}
+    draft = initial_mapping_draft(task, catalog)
+    for schema, rows in draft.schema_rows.items():
+        assert not timestamps.intersection(row.asim_field for row in rows)
+        assert not timestamps.intersection(
+            field.name for field in required_mapping_fields(task, catalog, schema, rows)
+        )
+        assert {
+            row.asim_field for row in configured_supplied_mappings(task, catalog, schema)
+        } == timestamps
+    assert next(row for row in draft.rows if row.asim_field == "EventCount").constant_value == "1"
+    draft = _draft(task, catalog)
+    count = next(row for row in draft.rows if row.asim_field == "EventCount")
+    count.source_kind, count.locator, count.constant_value = "constant", "", "5"
+    mappings = validate_mapping_draft(draft, task, catalog)
+    by_field = {mapping.asim_field: mapping for mapping in mappings}
+    assert by_field["EventCount"].constant_value == 5
+    assert by_field["EventStartTime"].source_field == "TimeGenerated"
+    assert by_field["EventEndTime"].output_field == "EventStartTime"
+    kql = compile_kql(
+        ParserSpecification(
+            parser_name="vimSuppliedTimes",
+            cluster_id=task.source_task.case_id,
+            schema_name="Authentication",
+            template=task.source_task.input.template,
+            source=ParserSource(
+                vendor=draft.vendor,
+                product=draft.product,
+                table=draft.source_table,
+                message_field=draft.message_field,
+            ),
+            field_mappings=mappings,
+            reviewer="test",
+        )
+    )
+    assert "EventCount = toint(5)" in kql
+    assert kql.index("EventStartTime = todatetime(") < kql.index(
+        "EventEndTime = todatetime(EventStartTime)"
+    )
+
+
+@pytest.mark.parametrize("target", ["EventStartTime", "EventEndTime"])
+def test_reviewer_cannot_override_supplied_timestamps(default_task, target):
+    task, catalog = default_task
+    assert task.setup is not None
+    task.setup.mapping_defaults = _timing_defaults()[:1]
+    task.setup.supplied_mappings = _timing_defaults()[1:]
+    draft = _draft(task, catalog)
+    draft.rows.append(
+        MappingRow(
+            asim_field=target,
+            source_kind="constant",
+            constant_value="2026-09-20",
+            transform="datetime",
+        )
+    )
+    with pytest.raises(ReviewError, match=f"{target} is supplied"):
+        validate_mapping_draft(draft, task, catalog)
+
+
+def test_supplied_and_editable_setup_targets_cannot_overlap():
+    with pytest.raises(ValidationError, match="unique ASIM target"):
+        MappingReviewSetup(
+            schema_versions={"Authentication": "0.1.3"},
+            mapping_defaults=_timing_defaults(),
+            supplied_mappings=_timing_defaults()[1:],
+        )
+
+
+def test_supplied_required_field_cannot_hide_a_blank_value(default_task):
+    task, catalog = default_task
+    assert task.setup is not None
+    catalog.fields.append(
+        AsimCatalogField(
+            name="RequiredText",
+            schema_name="Common",
+            kql_type="string",
+            field_class="Mandatory",
+        )
+    )
+    task.setup.supplied_mappings = [FieldMapping(asim_field="RequiredText", constant_value=" ")]
+    with pytest.raises(ReviewError, match="nonblank value for RequiredText"):
+        configured_supplied_mappings(task, catalog, "Authentication")
+
+
+def test_dependencies_across_supplied_and_editable_mappings_are_validated(default_task):
+    task, catalog = default_task
+    assert task.setup is not None
+    task.setup.mapping_defaults = [
+        FieldMapping(
+            asim_field="EventStartTime",
+            output_field="EventEndTime",
+            transform="datetime",
+        )
+    ]
+    task.setup.supplied_mappings = _timing_defaults()[2:]
+    with pytest.raises(ReviewError, match="cycle"):
+        configured_supplied_mappings(task, catalog, "Authentication")
+
+
+def test_supplied_setup_is_frozen_and_rendered_separately(tmp_path, annotation_queue):
+    catalog_dir, _, queue_dir, _, _ = annotation_queue
+    setup = MappingReviewSetup(
+        schema_versions={"Authentication": "0.1.3"},
+        mapping_defaults=_timing_defaults()[:1],
+        supplied_mappings=[FieldMapping(asim_field="EventResult", constant_value="Failure")],
+    )
+    bundle = tmp_path / "supplied"
+    prepare_mapping_review(queue_dir, catalog_dir, bundle, setup=setup)
+    task = load_mapping_review(bundle)[0][0]
+    payload = task.model_dump(mode="json")
+    payload["setup"]["supplied_mappings"][0]["constant_value"] = "Success"
+    with pytest.raises(ValidationError, match="revision does not match"):
+        MappingReviewTask.model_validate(payload)
+    item = json.loads((bundle / "potato/items.jsonl").read_text("utf-8").splitlines()[0])
+    assert item["supplied_mappings_by_schema"]["Authentication"][0]["asim_field"] == "EventResult"
+    assert all(row["asim_field"] != "EventResult" for row in item["initial_draft"]["rows"])
+
+
+def test_previous_editable_defaults_revision_still_loads(tmp_path, annotation_queue):
+    catalog_dir, _, queue_dir, _, _ = annotation_queue
+    bundle = tmp_path / "legacy-editable"
+    prepare_mapping_review(
+        queue_dir,
+        catalog_dir,
+        bundle,
+        setup=MappingReviewSetup(
+            schema_versions={"Authentication": "0.1.3"},
+            mapping_defaults=_timing_defaults()[:1],
+        ),
+    )
+    task = load_mapping_review(bundle)[0][0]
+    payload = task.model_dump(mode="json", exclude={"review_revision"})
+    payload["setup"].pop("supplied_mappings")
+    previous_revision = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()
+    ).hexdigest()
+    assert previous_revision == task.review_revision
+    restored = MappingReviewTask.model_validate({**payload, "review_revision": previous_revision})
+    assert restored.setup is not None and restored.setup.supplied_mappings is None

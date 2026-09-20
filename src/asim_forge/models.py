@@ -81,6 +81,7 @@ class ReviewTask(StrictModel):
 class FieldMapping(StrictModel):
     slot_id: str | None = Field(default=None, pattern=r"^p[1-9][0-9]*$")
     source_field: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    output_field: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     constant_value: str | int | float | bool | None = None
     asim_field: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     transform: Transform = "string"
@@ -90,14 +91,60 @@ class FieldMapping(StrictModel):
         if (
             sum(
                 value is not None
-                for value in (self.slot_id, self.source_field, self.constant_value)
+                for value in (
+                    self.slot_id,
+                    self.source_field,
+                    self.output_field,
+                    self.constant_value,
+                )
             )
             != 1
         ):
-            raise ValueError("A mapping requires exactly one slot, source field, or constant")
+            raise ValueError(
+                "A mapping requires exactly one slot, source field, output field, or constant"
+            )
         if isinstance(self.constant_value, float) and not math.isfinite(self.constant_value):
             raise ValueError("Mapping constants must be finite")
         return self
+
+
+def order_field_mappings(mappings: list[FieldMapping]) -> list[FieldMapping]:
+    """Validate output references and put producers before their dependent mappings.
+
+    Input columns (``source_field``) are deliberately independent of output fields:
+    they refer to values from the source table before any mappings are applied.
+    Among mappings whose dependencies are satisfied, retain the input order.
+    """
+    by_name: dict[str, FieldMapping] = {}
+    for mapping in mappings:
+        name = mapping.asim_field.casefold()
+        if name in by_name:
+            raise ValueError(f"Mappings target ASIM fields more than once: {mapping.asim_field}")
+        by_name[name] = mapping
+    for mapping in mappings:
+        if mapping.output_field is None:
+            continue
+        dependency = mapping.output_field.casefold()
+        if dependency == mapping.asim_field.casefold():
+            raise ValueError(f"Mapping {mapping.asim_field} cannot reference its own output")
+        if dependency not in by_name:
+            raise ValueError(
+                f"Mapping {mapping.asim_field} references unmapped output: {mapping.output_field}"
+            )
+
+    pending = list(mappings)
+    ordered: list[FieldMapping] = []
+    emitted: set[str] = set()
+    while pending:
+        for index, mapping in enumerate(pending):
+            if mapping.output_field is None or mapping.output_field.casefold() in emitted:
+                ordered.append(pending.pop(index))
+                emitted.add(mapping.asim_field.casefold())
+                break
+        else:
+            cycle_fields = ", ".join(mapping.asim_field for mapping in pending)
+            raise ValueError(f"Output mappings contain a dependency cycle: {cycle_fields}")
+    return ordered
 
 
 class MappingReviewProvenance(StrictModel):

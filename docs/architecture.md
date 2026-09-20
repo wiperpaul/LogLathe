@@ -81,14 +81,17 @@ prediction, and optional native reference output. Reference answers are joined
 after prediction and stay outside `MappingRequest`.
 
 Source metadata comes from queue setup and is read-only during review. Mapping
-setup pins available schema versions and the `TimeGenerated` policy. One confirmed
+setup pins available schema versions, the `TimeGenerated` policy, optional
+editable mapping defaults, and read-only supplied mappings. One confirmed
 schema applies to the entire template; a schema change requires confirmation again.
-Required target fields are prefilled with blank sources or values. Approval and
+Required target fields use configured defaults where explicit suggestions are
+absent; remaining targets are prefilled with blank sources or values. Approval and
 compilation reject missing or blank mandatory and applicable conditional mappings.
 The draft's `schema_rows` cache preserves edits when switching schemas; only its
 active `rows` participate in validation and compilation.
 Setup supplies `EventSchemaVersion` to the compiler. Platform-supplied fields and
-explicit ingestion assumptions appear separately from missing mappings, without
+explicit ingestion assumptions appear below the mapping editor with configured
+supplied mappings, separately from missing mappings, without
 weakening the native output conformance checks.
 
 `potato_bundle.py` renders the same source evidence for both review stages. The
@@ -110,7 +113,15 @@ become blinded annotation input. Rebuilding or splitting actual cluster evidence
 still requires a new queue and review revision.
 
 The existing `FieldMapping` contract accepts exactly one source: a parameter slot,
-a source-table column, or a scalar constant, followed by a supported conversion.
+a source-table column, a scalar constant, or another normalized output field,
+followed by a supported conversion. Source columns are captured before output
+assignments. Output references are ordered after their producers; missing or
+circular dependencies are rejected. Setup defaults reuse this typed contract,
+excluding template-specific slots. `mapping_defaults` remain editable review rows;
+`supplied_mappings` are excluded from those rows and appended from frozen setup
+during approval validation. Supplied targets reject reviewer overrides. The two
+lists cannot assign the same target. Absent lists are omitted from task
+fingerprints to keep older frozen bundles readable.
 Legacy slot mappings remain readable. Compiler output retains the assisted review's
 task, catalogue, cluster, and saved-state provenance. These engineering decisions
 do not enter the independent-label promotion workflow.

@@ -141,9 +141,9 @@ cluster task into a prepared mapping task remains future work.
 First assess and confirm **one schema per template**. Confirmation opens the
 **Mappings** tab. Return to **Schema** to reassess the choice. Changing the schema
 requires confirmation again and loads field suggestions projected against that
-schema's catalogue as evidence in **Schema**. The new schema starts with blank
-required mapping rows, even when suggested fields overlap with the previous
-schema. Select and map any suggested field you agree with. Switching back
+schema's catalogue as evidence in **Schema**. The new schema starts with configured
+defaults and blank remaining required mapping rows, even when suggested fields
+overlap with the previous schema. Select and map any suggested field you agree with. Switching back
 restores the first schema's edits. Each schema's draft is saved independently,
 including edits to shared fields.
 
@@ -166,8 +166,9 @@ from the source dropdown. The selected source span is review evidence, not a new
 extraction rule; a later cluster/extraction change still requires a fresh review
 bundle.
 Select ASIM fields from the catalogue dropdown, grouped by requirement class, and
-check their conversions. Setup-owned fields appear in a collapsed section and are
-excluded from the dropdown. Fields requiring unsupported conversions are also
+check their conversions. Setup-owned fields appear in the collapsed **Automatically
+supplied** section below the mapping editor and are excluded from the dropdown.
+Fields requiring unsupported conversions are also
 excluded. Only the active schema's compatible mappings are eligible for compilation;
 inactive drafts remain saved in Potato. Parser naming remains under **Parser settings**.
 
@@ -189,7 +190,8 @@ LogLathe's layout choice, not a prescribed Potato workflow.
 The mapper's internal source roles are available under suggestion evidence. They
 describe inferred event meaning and are not OCSF fields or an ASIM-to-OCSF mapping.
 Reviewers do not edit that vocabulary; use notes to flag an incorrect interpretation.
-Each mapping can use an extracted slot, a source-table column, or a fixed value.
+Each mapping can use an extracted slot, a source-table column, a fixed value, or
+another mapped ASIM field of the same type.
 Choose **Needs extraction work** when a variable value lacks an extraction or
 needs an unsupported derivation; describe the gap in the notes. Fixed template
 text can support a constant output without a new extraction. Choose
@@ -224,9 +226,49 @@ The column must exist when the query-time parser runs. Azure Monitor documents
 adding a missing `TimeGenerated` to the DCR transformation when creating a custom
 table; verify your actual ingestion setup against that contract.
 ([Custom tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table))
-`EventStartTime` and `EventEndTime` remain mapping requirements: map source event
-times, or explicitly map the available `TimeGenerated` column when the ASIM fallback
-is appropriate.
+Review setup separates editable `mapping_defaults` from read-only
+`supplied_mappings`. The [OpenSSH setup](../examples/review-setup/openssh.json) uses:
+
+```json
+{
+  "mapping_defaults": [
+    {"asim_field": "EventCount", "constant_value": 1, "transform": "int"}
+  ],
+  "supplied_mappings": [
+    {"asim_field": "Dvc", "source_field": "Computer", "transform": "string"},
+    {"asim_field": "EventStartTime", "source_field": "TimeGenerated", "transform": "datetime"},
+    {"asim_field": "EventEndTime", "output_field": "EventStartTime", "transform": "datetime"}
+  ]
+}
+```
+
+`EventCount` remains an editable row marked **Setup default**. Existing explicit
+suggestions take precedence, for example an extracted count in an aggregated
+message. Select the row to override it, or use **Reset to setup default**.
+`Dvc` uses the reporting server's `Computer` column. It and the configured timestamps
+appear only under **Automatically supplied**, where the reviewer can see their
+sources. They are excluded from the editable target picker
+and added from frozen setup during compilation. Supplied mappings take precedence
+over suggestions and cannot be overridden in a template review.
+
+`EventEndTime` follows the configured `EventStartTime`. The compiler evaluates the
+referenced mapping first. A field may appear in only one of the two setup lists.
+
+`source_field` reads the original table column. `output_field` reads another
+mapping's normalized result. Configure a different timestamp column when available.
+To let reviewers choose a timestamp per template, move that entry from
+`supplied_mappings` to `mapping_defaults`, or remove it to leave the required field
+blank. Omitting either list or using `[]` disables that list. Changing setup requires
+a new bundle; existing frozen reviews and saved decisions retain their original
+behavior. Configured mappings cannot use
+template-specific slot IDs. Preparation checks field names, conversions, constant
+values, and known reference columns. Approval rejects incomplete or circular mapping
+dependencies.
+
+ASIM's [common-field guidance](https://learn.microsoft.com/en-us/azure/sentinel/normalization-common-fields)
+uses `1` for unaggregated events and `TimeGenerated` when start or end timestamps are
+absent. Following start time for the end time is this setup's policy; configure
+a separate end-time source or enable template-level review when the source needs it.
 
 The default `semantic-frame` approach is shared with the evaluation harness.
 `--approach direct-lexical` and `--approach matcher-ensemble` select the other
