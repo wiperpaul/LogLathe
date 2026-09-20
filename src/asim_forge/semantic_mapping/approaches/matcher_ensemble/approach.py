@@ -66,7 +66,7 @@ class MatcherEnsembleApproach:
 
         fields = [
             field
-            for field in catalog.fields_for_schema(schemas[0].schema_name)
+            for field in catalog.fields_for_schema(request.review_schema or schemas[0].schema_name)
             if field.field_class != "Alias"
         ]
         mappings: list[PredictedAsimField] = []

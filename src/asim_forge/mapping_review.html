@@ -14,10 +14,14 @@
   <p id="ll-error" role="alert" hidden></p>
   <dl id="ll-context" class="ll-metadata" aria-label="Source setup"></dl>
   <section class="ll-source-preview" aria-label="Source evidence for this template">
-    <p id="ll-template-caption" class="ll-caption">Template</p>
-    <div id="ll-template" class="ll-template"></div>
+    <p id="ll-example-caption" class="ll-caption">Select text in the event to source the active ASIM field</p>
     <div id="ll-example-controls"></div>
-    <pre id="ll-example" class="ll-example"></pre>
+    <pre id="ll-example" class="ll-example" aria-label="Selectable source event"></pre>
+    <p id="ll-span-status" class="ll-caption" role="status"></p>
+    <details id="ll-template-details" class="ll-details" open>
+      <summary id="ll-template-caption">Template and extracted slots</summary>
+      <div id="ll-template" class="ll-template"></div>
+    </details>
   </section>
   <div class="ll-tabs" role="tablist" aria-label="Review stages">
     <button id="ll-tab-cluster" type="button" role="tab" aria-controls="ll-cluster-step" aria-selected="false" tabindex="-1">Cluster<small id="ll-cluster-summary">Approved</small></button>
@@ -48,6 +52,7 @@
     <summary id="ll-managed-summary">Automatically supplied fields</summary>
     <div id="ll-managed" class="ll-supplied"></div>
   </details>
+  <p id="ll-mapping-origin" class="ll-caption" role="status"></p>
   <div id="ll-warnings" class="ll-note" role="note"></div>
   <fieldset id="ll-field-editor" disabled>
   <div class="ll-workspace">
@@ -117,7 +122,13 @@
 .ll-template { font-family: ui-monospace, monospace; font-size: .85rem; overflow-wrap: anywhere; line-height: 2.2; }
 .ll-slot { font: inherit; padding: .1rem .35rem; border: 1px solid var(--border, #a1a1aa); border-radius: 4px; cursor: pointer; color: inherit; background: var(--secondary, #f4f4f5); }
 .ll-slot[aria-pressed="true"] { outline: 2px solid var(--ring, #6e56cf); }
-.ll-example { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .83rem; margin: .6rem 0 0; max-height: 10rem; overflow-y: auto; }
+.ll-example { white-space: pre-wrap; overflow-wrap: anywhere; font: .9rem/2 ui-monospace, monospace; margin: .6rem 0 0; max-height: 14rem; overflow-y: auto; user-select: text; cursor: text; }
+.ll-example mark { background: var(--secondary, #ede9fe); color: inherit; border-bottom: 2px solid var(--ring, #6e56cf); border-radius: 3px; padding: .1rem 0; }
+.ll-example mark[data-mapped="true"] { background: #dbeafe; border-bottom-color: #2563eb; }
+.ll-example mark[data-active="true"] { outline: 2px solid #1d4ed8; }
+.ll-example mark[data-label]::after { content: attr(data-label); display: inline-block; margin-left: .25rem; padding: 0 .25rem; border-radius: 3px; background: #1e40af; color: white; font: 600 .68rem/1.5 system-ui, sans-serif; user-select: none; }
+.ll-example mark.ll-unmatched { background: #fef3c7; border-bottom-color: #d97706; }
+#ll-span-status { margin-top: .4rem; }
 #ll-example-controls { margin-top: .6rem; font-size: .8rem; }
 .ll-row label, .ll-metadata label { display: flex; flex-direction: column; gap: .3rem; font-size: .88rem; font-weight: 500; }
 .ll-source { display: flex; flex-direction: column; gap: .4rem; }
@@ -165,6 +176,7 @@
     }
     const fieldsBySchema = record.catalogue_fields;
     const source = task.source_task.input;
+    const exampleCaptures = record.example_slot_spans || [];
     const reference = task.reference;
     const setup = task.setup;
     const configuredSchemas = setup ? Object.keys(setup.schema_versions) : Object.keys(fieldsBySchema);
@@ -225,8 +237,7 @@
     }
     function rememberSchema() {
       if (!configuredSchemas.includes(draft.schema_name)) return;
-      const hidden = (draft.schema_rows[draft.schema_name] || []).filter(row => !editableRow(row));
-      draft.schema_rows[draft.schema_name] = structuredClone([...draft.rows, ...hidden]);
+      draft.schema_rows[draft.schema_name] = structuredClone(draft.rows);
     }
     function hasSource(row) { return Boolean((row.source_kind === 'constant' ? row.constant_value : row.locator).trim()); }
     function requiredFields() {
@@ -243,9 +254,8 @@
       }
     }
     function activateSchema(name) {
-      const previous = draft.schema_name;
       rememberSchema();
-      const candidates = draft.schema_rows[name] || draft.schema_rows[previous] || draft.rows;
+      const candidates = draft.schema_rows[name] || [];
       draft.schema_name = name;
       if (configuredSchemas.includes(name) && !draft.schema_rows[name]) draft.schema_rows[name] = structuredClone(candidates);
       draft.rows = configuredSchemas.includes(name) ? structuredClone(candidates.filter(row => editableRow(row, name))) : [];
@@ -261,7 +271,7 @@
       document.getElementById('ll-status').textContent = draft.cluster_status === 'approved' ? statusNames[draft.status] : clusterNames[draft.cluster_status];
     }
     function changed() {
-      ensureRequiredRows(); draft.status = 'in_progress'; error.hidden = true; store(); warnings(); renderMappingList(); renderTemplate();
+      ensureRequiredRows(); draft.status = 'in_progress'; error.hidden = true; store(); warnings(); renderMappingList(); renderTemplate(); renderExample();
     }
     function referenceValue(name) {
       if (!reference) return 'No native reference attached';
@@ -294,7 +304,9 @@
     function showStep(step, focus = false) {
       if (document.getElementById('ll-tab-' + step).disabled) step = draft.cluster_status !== 'approved' ? 'cluster' : 'schema';
       activeStep = step;
-      document.getElementById('ll-template-caption').textContent = step === 'mappings' ? 'Template — select an extracted slot to review its mapping' : 'Template';
+      document.getElementById('ll-template-details').open = step !== 'mappings';
+      document.getElementById('ll-example-caption').textContent = step === 'mappings' ?
+        'Select text in the event to source the active ASIM field. Highlighted text is already extracted.' : 'Representative source event';
       steps.forEach((name, index) => {
         const selected = name === step;
         document.getElementById('ll-' + name + '-step').hidden = !selected;
@@ -337,6 +349,9 @@
       document.getElementById('ll-confirm-schema').textContent = confirmed ? 'Continue to mappings' : 'Confirm schema and review fields';
       document.getElementById('ll-schema-status').textContent = confirmed ? 'Schema confirmed. Review the fields below.' : 'Assess the suggested schema before reviewing fields.';
       document.getElementById('ll-schema-version').textContent = setup && valid ? 'EventSchemaVersion: ' + setup.schema_versions[draft.schema_name] + ' — supplied automatically from setup.' : 'A version must be available in setup for the selected schema.';
+      const suggestedSchema = task.prediction.ranked_schemas[0]?.schema_name;
+      document.getElementById('ll-mapping-origin').textContent = valid && draft.schema_name !== suggestedSchema ?
+        draft.schema_name + ' mappings start with blank required fields. Suggestions are evidence under Schema until you choose to map them.' : '';
       document.getElementById('ll-schema-summary').textContent = (draft.schema_name || 'Choose a schema') + (confirmed ? ' · Confirmed' : ' · Unconfirmed');
       document.getElementById('ll-cluster-summary').textContent = clusterNames[draft.cluster_status];
       document.getElementById('ll-tab-schema').disabled = !clusterApproved;
@@ -346,6 +361,7 @@
       block.textContent = clusterNames[draft.cluster_status] + '. Mapping edits are retained. Resolve the cluster review before continuing; this item cannot compile.';
       showStep(activeStep);
       renderTemplate();
+      renderSuggestions();
     }
     schema.addEventListener('change', () => { activateSchema(schema.value); draft.schema_confirmed = false; changed(); renderRows(); schemaState(); });
     document.getElementById('ll-confirm-schema').addEventListener('click', () => {
@@ -361,15 +377,77 @@
       control.addEventListener('input', () => { draft[key] = control.value; changed(); }); metadata.append(label(title, control));
     });
     const sourceList = document.getElementById('ll-sources');
-    [...new Set([...slots.keys(), ...Object.keys(reference ? reference.source_columns : {}), ...(setup && setup.time_generated !== 'map' ? ['TimeGenerated'] : [])])].forEach(name => {
+    [...new Set([...Object.keys(reference ? reference.source_columns : {}), ...(setup && setup.time_generated !== 'map' ? ['TimeGenerated'] : [])])].forEach(name => {
       const option = element('option'); option.value = name; sourceList.append(option);
     });
     const examples = source.representative_events;
     const exampleSelect = select(examples.map((event, index) => [String(index), 'Example ' + (index + 1) + ' · ' + event.source_file + ':' + event.line_number]), '0');
     exampleSelect.setAttribute('aria-label', 'Source example');
-    function showExample() { document.getElementById('ll-example').textContent = examples[Number(exampleSelect.value)]?.text || ''; }
-    exampleSelect.addEventListener('change', showExample);
-    document.getElementById('ll-example-controls').append(exampleSelect); showExample();
+    const exampleView = document.getElementById('ll-example');
+    const spanStatus = document.getElementById('ll-span-status');
+    function renderExample() {
+      const exampleIndex = Number(exampleSelect.value);
+      const eventText = examples[exampleIndex]?.text || '';
+      const captures = exampleCaptures[exampleIndex] || [];
+      const selected = draft.rows.filter(row => row.source_span?.example_index === exampleIndex).map(row => ({row, span: row.source_span}));
+      const bounds = [...new Set([0, eventText.length, ...captures.flatMap(span => [span.start, span.end]), ...selected.flatMap(({span}) => [span.start, span.end])])].sort((a, b) => a - b);
+      exampleView.replaceChildren();
+      for (let part = 0; part < bounds.length - 1; part++) {
+        const start = bounds[part], end = bounds[part + 1];
+        const text = eventText.slice(start, end);
+        const capture = captures.find(span => span.start <= start && span.end >= end);
+        const chosen = selected.find(({span}) => span.start <= start && span.end >= end);
+        if (!capture && !chosen) { exampleView.append(document.createTextNode(text)); continue; }
+        const mark = element('mark', text);
+        if (capture) {
+          const mapped = draft.rows.find(row => row.source_kind === 'slot' && row.locator === capture.slot_id);
+          mark.dataset.mapped = String(Boolean(mapped));
+          if (start === capture.start) mark.dataset.label = mapped?.asim_field || capture.slot_id;
+          mark.title = capture.slot_id + (mapped?.asim_field ? ' → ' + mapped.asim_field : ' · extracted slot');
+          mark.dataset.active = String(Boolean(mapped && draft.rows[activeRow] === mapped));
+        }
+        if (chosen && !chosen.row.locator) {
+          mark.classList.add('ll-unmatched');
+          if (start === chosen.span.start) mark.dataset.label = 'Needs extraction';
+          else delete mark.dataset.label;
+        }
+        if (chosen && draft.rows[activeRow] === chosen.row) mark.dataset.active = 'true';
+        exampleView.append(mark);
+      }
+      if (!eventText) exampleView.textContent = '';
+      const active = draft.rows[activeRow];
+      spanStatus.textContent = active?.source_span ?
+        (active.locator ? 'Selected “' + active.source_span.text + '” → ' + active.locator + ' · ' + (active.asim_field || 'choose ASIM field') :
+          'Selected “' + active.source_span.text + '” is outside an extracted slot. Mark this review as needing extraction work.') :
+        active?.source_kind === 'slot' && active.locator ? 'Using extracted slot ' + active.locator + '. Select its text to verify the boundary.' : '';
+    }
+    function selectExampleSpan() {
+      if (activeStep !== 'mappings' || draft.cluster_status !== 'approved' || !draft.schema_confirmed) return;
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      if (!exampleView.contains(range.startContainer) || !exampleView.contains(range.endContainer)) return;
+      const prefix = range.cloneRange(); prefix.selectNodeContents(exampleView); prefix.setEnd(range.startContainer, range.startOffset);
+      const start = prefix.toString().length, end = start + range.toString().length;
+      const exampleIndex = Number(exampleSelect.value), text = examples[exampleIndex].text.slice(start, end);
+      if (!text.trim() || end > examples[exampleIndex].text.length) return;
+      const capture = (exampleCaptures[exampleIndex] || []).find(span => span.start === start && span.end === end && span.text === text);
+      const mappedIndex = capture ? draft.rows.findIndex(row => row.source_kind === 'slot' && row.locator === capture.slot_id) : -1;
+      if (mappedIndex >= 0 && mappedIndex !== activeRow) {
+        selection.removeAllRanges(); activateRow(mappedIndex);
+        document.querySelector('#ll-rows [data-key="asim_field"]')?.focus(); return;
+      }
+      if (!draft.rows.length) draft.rows.push({source_kind: 'slot', locator: '', role: '', asim_field: '', transform: 'string', constant_value: '', source_span: null});
+      const row = draft.rows[activeRow];
+      row.source_kind = 'slot'; row.locator = capture?.slot_id || ''; row.constant_value = '';
+      row.source_span = {example_index: exampleIndex, start, end, text};
+      selection.removeAllRanges(); changed(); renderRows();
+      document.querySelector('#ll-rows [data-key="asim_field"]')?.focus();
+    }
+    exampleView.addEventListener('mouseup', selectExampleSpan);
+    exampleView.addEventListener('keyup', selectExampleSpan);
+    exampleSelect.addEventListener('change', renderExample);
+    document.getElementById('ll-example-controls').append(exampleSelect); renderExample();
     function activateRow(index) { activeRow = index; renderRows(); }
     function renderTemplate() {
       const preview = document.getElementById('ll-template'); preview.replaceChildren();
@@ -408,48 +486,55 @@
         const button = element('button', undefined, 'll-mapping-choice'); button.type = 'button';
         button.dataset.mappingIndex = String(index); button.setAttribute('aria-pressed', String(index === activeRow));
         const needsSource = required.has(row.asim_field) && !hasSource(row);
-        const origin = element('span', needsSource ? 'Choose source or value' : row.source_kind === 'constant' ? row.constant_value || '(empty)' : row.locator || 'Choose source');
+        const origin = element('span', row.source_span?.text || (needsSource ? 'Choose source or value' : row.source_kind === 'constant' ? row.constant_value || '(empty)' : row.locator || 'Choose source'));
         const sample = row.source_kind === 'slot' ? slots.get(row.locator)?.examples[0] : '';
-        origin.append(element('small', sample || {slot: 'Extracted slot', source_field: 'Source-table field', constant: 'Fixed value'}[row.source_kind]));
+        origin.append(element('small', row.source_span && !row.locator ? 'Needs extraction' : row.source_span && row.locator ? row.locator + ' · extracted span' : sample || {slot: 'Event text span', source_field: 'Source-table field', constant: 'Fixed value'}[row.source_kind]));
         const target = element('span', row.asim_field || 'Choose ASIM field');
         if (required.has(row.asim_field)) target.append(element('small', needsSource ? 'Required · Needs value' : 'Required', needsSource ? 'll-required' : ''));
         button.append(target, origin);
         button.addEventListener('click', () => activateRow(index)); list.append(button);
       });
-      if (!draft.rows.length) list.append(element('p', 'Select a template slot or add a mapping.', 'll-caption'));
+      if (!draft.rows.length) list.append(element('p', 'Add a mapping, then select its source text in the event.', 'll-caption'));
     }
     function renderRows() {
       const rows = document.getElementById('ll-rows'); rows.replaceChildren();
       activeRow = Math.max(0, Math.min(activeRow, draft.rows.length - 1));
-      renderMappingList(); renderTemplate();
+      renderMappingList(); renderTemplate(); renderExample();
       if (!draft.rows.length) rows.append(element('p', 'The selected mapping will appear here.', 'll-caption'));
       draft.rows.forEach((row, index) => {
         if (index !== activeRow) return;
         const card = element('div', undefined, 'll-row'); card.dataset.row = String(index);
         const required = requiredFields().some(field => field.name === row.asim_field);
         const sourceControls = element('div', undefined, 'll-source');
-        const kind = select([['slot', 'Extracted slot'], ['source_field', 'Source-table field'], ['constant', 'Fixed value']], row.source_kind);
+        const kind = select([['slot', 'Event text span'], ['source_field', 'Source-table field'], ['constant', 'Fixed value']], row.source_kind);
         kind.dataset.key = 'source_kind';
-        const locator = input(row.source_kind === 'constant' ? row.constant_value : row.locator, row.source_kind === 'constant' ? undefined : 'll-sources');
-        locator.dataset.key = 'source';
-        locator.required = required; locator.placeholder = required ? 'Required — choose a source or enter a value' : 'Source or value';
-        if (required && !hasSource(row)) locator.classList.add('ll-required-input');
         const sample = element('span', undefined, 'll-value');
         function sampleValue() {
           const slot = slots.get(row.locator);
-          sample.textContent = row.source_kind === 'slot' && slot ? slot.examples.join(', ') :
+          sample.textContent = row.source_kind === 'slot' && row.source_span ? (slot ? 'Matched ' + row.locator + ' in example ' + (row.source_span.example_index + 1) : 'No extracted slot has these exact boundaries; mark Needs extraction work.') :
+            row.source_kind === 'slot' && slot ? 'Extracted slot ' + row.locator + ' · ' + slot.examples.join(', ') :
             row.source_kind === 'source_field' && setup && setup.time_generated === 'ingestion' && row.locator === 'TimeGenerated' ? 'Available after ingestion (setup assumption)' :
             row.source_kind === 'source_field' && reference ? reference.examples.map(example => String(example.source_values[row.locator] ?? '')).join(', ') : '';
         }
         kind.addEventListener('change', () => {
-          row.source_kind = kind.value; changed(); renderRows();
+          row.source_kind = kind.value; row.locator = ''; row.constant_value = ''; row.source_span = null; changed(); renderRows();
         });
-        locator.addEventListener('input', () => {
-          if (row.source_kind === 'constant') row.constant_value = locator.value;
-          else row.locator = locator.value;
-          locator.classList.toggle('ll-required-input', required && !hasSource(row)); sampleValue(); changed();
-        });
-        sourceControls.append(kind, locator, sample); sampleValue();
+        sourceControls.append(kind);
+        if (row.source_kind === 'slot') {
+          sourceControls.append(element('span', row.source_span ? 'Selected “' + row.source_span.text + '”' : 'Select the value in the source event above. Use Template and extracted slots if the example cannot be selected.', 'll-value'));
+        } else {
+          const locator = input(row.source_kind === 'constant' ? row.constant_value : row.locator, row.source_kind === 'constant' ? undefined : 'll-sources');
+          locator.dataset.key = 'source';
+          locator.required = required; locator.placeholder = row.source_kind === 'constant' ? 'Enter a fixed value' : 'Choose a source-table column';
+          if (required && !hasSource(row)) locator.classList.add('ll-required-input');
+          locator.addEventListener('input', () => {
+            if (row.source_kind === 'constant') row.constant_value = locator.value;
+            else row.locator = locator.value;
+            locator.classList.toggle('ll-required-input', required && !hasSource(row)); sampleValue(); changed();
+          });
+          sourceControls.append(locator);
+        }
+        sourceControls.append(sample); sampleValue();
         card.append(label('Source / value', sourceControls));
         const target = targetSelect(row.asim_field); target.dataset.key = 'asim_field';
         target.disabled = required;
@@ -474,7 +559,7 @@
         const keepRequired = required && draft.rows.filter(candidate => candidate.asim_field === row.asim_field).length === 1;
         const remove = element('button', keepRequired ? 'Clear this required value' : 'Remove this mapping', 'll-remove'); remove.type = 'button';
         remove.addEventListener('click', () => {
-          if (keepRequired) { row.source_kind = 'slot'; row.locator = ''; row.constant_value = ''; row.role = ''; }
+          if (keepRequired) { row.source_kind = 'slot'; row.locator = ''; row.constant_value = ''; row.role = ''; row.source_span = null; }
           else draft.rows.splice(index, 1);
           changed(); renderRows();
         });
@@ -482,7 +567,8 @@
       });
     }
     function warnings() {
-      const warnings = [...task.prediction.warnings];
+      const prediction = fieldPrediction();
+      const warnings = [...(prediction?.warnings || [])];
       const represented = new Set(draft.rows.map(row => row.asim_field));
       const managed = managedFields();
       managed.forEach((_, name) => represented.add(name));
@@ -499,7 +585,7 @@
       });
       table.append(body); supplied.replaceChildren(table);
       if (reference && draft.schema_name && (reference.schema_name !== draft.schema_name || (setup && reference.schema_version !== setup.schema_versions[draft.schema_name]))) warnings.push('Reference output uses ' + reference.schema_name + ' ' + reference.schema_version + '; review targets ' + draft.schema_name + (setup ? ' ' + setup.schema_versions[draft.schema_name] : '') + '.');
-      task.prediction.asim_fields.forEach(mapping => {
+      (prediction?.asim_fields || []).forEach(mapping => {
         if (mapping.source_kind !== 'slot' && mapping.constant_value === null && !represented.has(mapping.asim_field)) {
           warnings.push('Extraction or derivation needed for ' + mapping.locator + ' → ' + mapping.asim_field + '.');
         }
@@ -508,18 +594,34 @@
       const box = document.getElementById('ll-warnings'); box.replaceChildren(); box.hidden = !warnings.length;
       warnings.forEach(message => box.append(element('div', message)));
     }
-    const suggestions = document.getElementById('ll-suggestions');
-    suggestions.append(element('p', 'Approach: ' + task.prediction.approach.name + ' ' + task.prediction.approach.version + '. Ranking scores are not calibrated probabilities.'));
-    const evidenceList = element('ul');
-    task.prediction.ranked_schemas.forEach(item => evidenceList.append(element('li', item.schema_name + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
-    task.prediction.asim_fields.forEach(item => evidenceList.append(element('li', item.locator + ' → ' + item.asim_field + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
-    suggestions.append(evidenceList);
-    const interpretations = element('details');
-    interpretations.append(element('summary', 'Internal source-role evidence'));
-    interpretations.append(element('p', 'These are the mapper’s internal descriptions of what values represent in the event. They are not OCSF fields and do not need editing here. Use review notes to flag an incorrect interpretation.'));
-    const roles = element('ul');
-    task.prediction.source_semantics.forEach(item => roles.append(element('li', item.locator + ': ' + item.role)));
-    interpretations.append(roles); suggestions.append(interpretations);
+    function fieldPrediction() {
+      const suggestedSchema = task.prediction.ranked_schemas[0]?.schema_name;
+      return task.schema_predictions?.[draft.schema_name] ||
+        (draft.schema_name === suggestedSchema ? task.prediction : null);
+    }
+    function renderSuggestions() {
+      const suggestions = document.getElementById('ll-suggestions');
+      suggestions.replaceChildren();
+      suggestions.append(element('p', 'Approach: ' + task.prediction.approach.name + ' ' + task.prediction.approach.version + '. Ranking scores are not calibrated probabilities.'));
+      const schemaList = element('ul');
+      task.prediction.ranked_schemas.forEach(item => schemaList.append(element('li', item.schema_name + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
+      suggestions.append(schemaList);
+      const prediction = fieldPrediction();
+      if (!prediction) {
+        suggestions.append(element('p', 'No field suggestions were generated for ' + (draft.schema_name || 'an unselected schema') + '. Review its required fields directly.'));
+        return;
+      }
+      suggestions.append(element('p', 'Field suggestions for ' + draft.schema_name + ' (not applied automatically when changing schema):'));
+      const evidenceList = element('ul');
+      prediction.asim_fields.forEach(item => evidenceList.append(element('li', item.locator + ' → ' + item.asim_field + ': score ' + item.score.toFixed(2) + '. ' + item.evidence.join('; '))));
+      suggestions.append(evidenceList);
+      const interpretations = element('details');
+      interpretations.append(element('summary', 'Internal source-role evidence'));
+      interpretations.append(element('p', 'These are the mapper’s internal descriptions of what values represent in the event. They are not OCSF fields and do not need editing here. Use review notes to flag an incorrect interpretation.'));
+      const roles = element('ul');
+      prediction.source_semantics.forEach(item => roles.append(element('li', item.locator + ': ' + item.role)));
+      interpretations.append(roles); suggestions.append(interpretations);
+    }
     if (reference) {
       document.getElementById('ll-reference').hidden = false;
       const content = document.getElementById('ll-reference-content');
@@ -557,8 +659,8 @@
       const required = new Set(requiredFields().map(field => field.name));
       const missing = draft.rows.findIndex(row => required.has(row.asim_field) && !hasSource(row));
       if (missing >= 0) {
-        activateRow(missing); document.querySelector('#ll-rows [data-key="source"]')?.focus();
-        return 'Fill the required source or value for ' + draft.rows[missing].asim_field + '.';
+        activateRow(missing); document.querySelector('#ll-rows [data-key="source_kind"]')?.focus();
+        return draft.rows[missing].source_span ? 'The selected text for ' + draft.rows[missing].asim_field + ' is not an extracted slot. Mark Needs extraction work.' : 'Select a source span or value for ' + draft.rows[missing].asim_field + '.';
       }
       const targets = new Set(), assigned = new Set();
       for (const row of draft.rows) {

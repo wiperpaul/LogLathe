@@ -43,6 +43,9 @@ class MappingRequest(StrictModel):
     case_id: Identifier
     catalogue_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
     input: SemanticMappingInput
+    # A reviewer-selected target for field projection. Schema ranking still uses
+    # the original evidence; unlike schema_hint this is not a harness oracle.
+    review_schema: AsimName | None = None
     # Diagnostic oracle constraints set only by the evaluation harness, never in production.
     schema_hint: AsimName | None = None
     frame_hint: list[SourceFrameHint] | None = None
