@@ -53,22 +53,28 @@ class MappingReviewSetup(StrictModel):
     ] = Field(min_length=1)
     time_generated: TimeGeneratedMode = "map"
     mapping_defaults: list[FieldMapping] | None = None
+    supplied_mappings: list[FieldMapping] | None = None
 
     @model_validator(mode="after")
-    def defaults_are_template_independent(self) -> MappingReviewSetup:
-        defaults = self.mapping_defaults or []
+    def mappings_are_template_independent(self) -> MappingReviewSetup:
+        defaults = (self.mapping_defaults or []) + (self.supplied_mappings or [])
         if any(mapping.slot_id is not None for mapping in defaults):
-            raise ValueError("Setup mapping defaults cannot refer to template-specific slots")
+            raise ValueError("Setup mappings cannot refer to template-specific slots")
         targets = [mapping.asim_field.casefold() for mapping in defaults]
         if len(targets) != len(set(targets)):
-            raise ValueError("Setup mapping defaults must have unique ASIM target fields")
+            raise ValueError("Setup mappings must have unique ASIM target fields across both lists")
         return self
 
 
 def _setup_payload(setup: MappingReviewSetup) -> dict[str, object]:
-    # Omit the new optional member to preserve revisions of earlier frozen tasks.
+    # Omit absent optional lists to preserve revisions of earlier frozen tasks.
     return setup.model_dump(
-        mode="json", exclude={"mapping_defaults"} if setup.mapping_defaults is None else set()
+        mode="json",
+        exclude={
+            name
+            for name in ("mapping_defaults", "supplied_mappings")
+            if getattr(setup, name) is None
+        },
     )
 
 
@@ -188,12 +194,14 @@ _BUNDLE_FILES = (
 )
 
 
-def _managed_fields(task: MappingReviewTask) -> set[str]:
+def _managed_fields(task: MappingReviewTask, *, include_supplied: bool = True) -> set[str]:
     names = {"EventSchema", "EventVendor", "EventProduct"}
     if task.setup is not None:
         names.update({"EventSchemaVersion", "Type"})
         if task.setup.time_generated != "map":
             names.add("TimeGenerated")
+        if include_supplied:
+            names.update(mapping.asim_field for mapping in task.setup.supplied_mappings or [])
     return names
 
 
@@ -218,8 +226,35 @@ def required_mapping_fields(
 def configured_mapping_defaults(
     task: MappingReviewTask, catalog: AsimCatalog, schema: str
 ) -> list[MappingRow]:
-    """Return editable defaults applicable to this schema, checking frozen setup inputs."""
-    if task.setup is None or not task.setup.mapping_defaults:
+    """Return editable defaults, validating both kinds of configured mappings."""
+    names = (
+        {mapping.asim_field for mapping in task.setup.mapping_defaults or []}
+        if task.setup
+        else set()
+    )
+    return [
+        row for row in _configured_mapping_rows(task, catalog, schema) if row.asim_field in names
+    ]
+
+
+def configured_supplied_mappings(
+    task: MappingReviewTask, catalog: AsimCatalog, schema: str
+) -> list[MappingRow]:
+    """Return read-only mappings applied from setup during approval and compilation."""
+    names = (
+        {mapping.asim_field for mapping in task.setup.supplied_mappings or []}
+        if task.setup
+        else set()
+    )
+    return [
+        row for row in _configured_mapping_rows(task, catalog, schema) if row.asim_field in names
+    ]
+
+
+def _configured_mapping_rows(
+    task: MappingReviewTask, catalog: AsimCatalog, schema: str
+) -> list[MappingRow]:
+    if task.setup is None:
         return []
     fields = {field.name: field for field in catalog.fields_for_schema(schema)}
     available = {
@@ -227,9 +262,10 @@ def configured_mapping_defaults(
         for name in task.setup.schema_versions
         for field in catalog.fields_for_schema(name)
     }
-    managed = _managed_fields(task)
+    managed = _managed_fields(task, include_supplied=False)
+    supplied_names = {mapping.asim_field for mapping in task.setup.supplied_mappings or []}
     rows = []
-    for mapping in task.setup.mapping_defaults:
+    for mapping in (task.setup.mapping_defaults or []) + (task.setup.supplied_mappings or []):
         target = mapping.asim_field
         if target not in available:
             raise ReviewError(
@@ -277,7 +313,7 @@ def configured_mapping_defaults(
             )
             if dependency is None or dependency.name in managed:
                 raise ReviewError(
-                    f"Setup default {target} must reference an editable ASIM output field: "
+                    f"Setup default {target} must reference a mapped ASIM output field: "
                     f"{mapping.output_field}"
                 )
             if dependency.kql_type != mapping.transform:
@@ -299,6 +335,12 @@ def configured_mapping_defaults(
                 transform=mapping.transform,
                 constant_value=value if isinstance(value, str) else json.dumps(value),
             )
+            if (
+                target in supplied_names
+                and field.field_class in {"Mandatory", "Conditional"}
+                and not row.constant_value.strip()
+            ):
+                raise ReviewError(f"Supplied mapping requires a nonblank value for {target}")
             try:
                 converted = _constant_value(row)
             except (ValueError, ReviewError) as exc:
@@ -613,8 +655,14 @@ def validate_mapping_draft(
             for key in ("vendor", "product", "source_table", "message_field")
         ):
             raise ReviewError("Source metadata is fixed by setup and cannot be changed in a review")
-    if not draft.rows:
+    supplied = configured_supplied_mappings(task, catalog, draft.schema_name)
+    if not draft.rows and not supplied:
         raise ReviewError("An approved mapping must contain at least one field")
+    for row in draft.rows:
+        if row.asim_field in _managed_fields(task):
+            raise ReviewError(
+                f"{row.asim_field} is supplied by schema selection, setup, or ingestion"
+            )
     fields = {field.name: field for field in catalog.fields_for_schema(draft.schema_name)}
     required = {
         field.name
@@ -631,7 +679,7 @@ def validate_mapping_draft(
         source_input.template, source_input.representative_events, source_input.parameter_slots
     )
     mappings = []
-    for row in draft.rows:
+    for row in [*draft.rows, *supplied]:
         if row.source_span is not None:
             span = row.source_span
             if span.example_index >= len(source_input.representative_events):
@@ -671,10 +719,6 @@ def validate_mapping_draft(
         field = fields.get(row.asim_field)
         if field is None or field.kql_type != row.transform:
             raise ReviewError(f"Unknown target or incompatible conversion: {row.asim_field}")
-        if row.asim_field in _managed_fields(task):
-            raise ReviewError(
-                f"{row.asim_field} is supplied by schema selection, setup, or ingestion"
-            )
         value = row.constant_value if row.source_kind == "constant" else row.locator
         if row.asim_field in required and not value.strip():
             raise ReviewError(f"Fill the required mapping for {row.asim_field}")

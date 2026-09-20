@@ -166,8 +166,9 @@ from the source dropdown. The selected source span is review evidence, not a new
 extraction rule; a later cluster/extraction change still requires a fresh review
 bundle.
 Select ASIM fields from the catalogue dropdown, grouped by requirement class, and
-check their conversions. Setup-owned fields appear in a collapsed section and are
-excluded from the dropdown. Fields requiring unsupported conversions are also
+check their conversions. Setup-owned fields appear in the collapsed **Automatically
+supplied** section below the mapping editor and are excluded from the dropdown.
+Fields requiring unsupported conversions are also
 excluded. Only the active schema's compatible mappings are eligible for compilation;
 inactive drafts remain saved in Potato. Parser naming remains under **Parser settings**.
 
@@ -225,37 +226,47 @@ The column must exist when the query-time parser runs. Azure Monitor documents
 adding a missing `TimeGenerated` to the DCR transformation when creating a custom
 table; verify your actual ingestion setup against that contract.
 ([Custom tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table))
-The optional `mapping_defaults` list in review setup fills editable rows before
-review. The [OpenSSH setup](../examples/review-setup/openssh.json) uses:
+Review setup separates editable `mapping_defaults` from read-only
+`supplied_mappings`. The [OpenSSH setup](../examples/review-setup/openssh.json) uses:
 
 ```json
-"mapping_defaults": [
-  {"asim_field": "EventCount", "constant_value": 1, "transform": "int"},
-  {"asim_field": "EventStartTime", "source_field": "TimeGenerated", "transform": "datetime"},
-  {"asim_field": "EventEndTime", "output_field": "EventStartTime", "transform": "datetime"}
-]
+{
+  "mapping_defaults": [
+    {"asim_field": "EventCount", "constant_value": 1, "transform": "int"}
+  ],
+  "supplied_mappings": [
+    {"asim_field": "EventStartTime", "source_field": "TimeGenerated", "transform": "datetime"},
+    {"asim_field": "EventEndTime", "output_field": "EventStartTime", "transform": "datetime"}
+  ]
+}
 ```
 
-These rows are marked **Setup default** and count as filled. Existing explicit
+`EventCount` remains an editable row marked **Setup default**. Existing explicit
 suggestions take precedence, for example an extracted count in an aggregated
-message. Select a row to override it, or use **Reset to setup default**. Changing
-the start-time mapping also changes the derived end time until the reviewer
-overrides the end-time mapping. The source dropdown offers **Another mapped ASIM
-field** for these dependencies; the compiler evaluates the referenced mapping first.
+message. Select the row to override it, or use **Reset to setup default**.
+The configured timestamps appear only under **Automatically supplied**, where the
+reviewer can see their sources. They are excluded from the editable target picker
+and added from frozen setup during compilation. Supplied mappings take precedence
+over suggestions and cannot be overridden in a template review.
+
+`EventEndTime` follows the configured `EventStartTime`. The compiler evaluates the
+referenced mapping first. A field may appear in only one of the two setup lists.
 
 `source_field` reads the original table column. `output_field` reads another
-mapping's normalized result. Configure a different timestamp column when available,
-or remove an entry to require the reviewer to map that field. Omitting the list or
-using `[]` disables defaults. Changing setup requires a new bundle; existing frozen
-reviews and saved decisions retain their original behavior. Defaults cannot use
+mapping's normalized result. Configure a different timestamp column when available.
+To let reviewers choose a timestamp per template, move that entry from
+`supplied_mappings` to `mapping_defaults`, or remove it to leave the required field
+blank. Omitting either list or using `[]` disables that list. Changing setup requires
+a new bundle; existing frozen reviews and saved decisions retain their original
+behavior. Configured mappings cannot use
 template-specific slot IDs. Preparation checks field names, conversions, constant
 values, and known reference columns. Approval rejects incomplete or circular mapping
 dependencies.
 
 ASIM's [common-field guidance](https://learn.microsoft.com/en-us/azure/sentinel/normalization-common-fields)
 uses `1` for unaggregated events and `TimeGenerated` when start or end timestamps are
-absent. Following start time for the end time is this setup's editable policy;
-records with a distinct end time should override it.
+absent. Following start time for the end time is this setup's policy; configure
+a separate end-time source or enable template-level review when the source needs it.
 
 The default `semantic-frame` approach is shared with the evaluation harness.
 `--approach direct-lexical` and `--approach matcher-ensemble` select the other

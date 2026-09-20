@@ -6,7 +6,9 @@
   },
   "time_generated": "source",
   "mapping_defaults": [
-    {"asim_field": "EventCount", "constant_value": 1, "transform": "int"},
+    {"asim_field": "EventCount", "constant_value": 1, "transform": "int"}
+  ],
+  "supplied_mappings": [
     {"asim_field": "EventStartTime", "source_field": "TimeGenerated", "transform": "datetime"},
     {"asim_field": "EventEndTime", "output_field": "EventStartTime", "transform": "datetime"}
   ]
