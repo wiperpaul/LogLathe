@@ -282,6 +282,78 @@ reviewer but never enter the mapping approach's request. Assisted reviews retain
 their own provenance and are not promoted into independent semantic gold. Use the
 [dataset-curation workflow](dataset-curation.md) for blinded labels.
 
+### LLM-assisted critique of attempted mappings
+
+An attempted mapping is a useful point to involve an LLM: after a human or mapper
+has proposed a schema and fields, and before the reviewer approves them. The model
+can compare that concrete proposal with ASIM documentation, explain common entity
+roles and schema-specific conventions, suggest corrections, and identify missing
+context. This can help a security engineer learn ASIM while also exposing mistakes
+in mappings proposed by another model. The value includes the discussion that a
+suggestion starts, even when the reviewer ultimately rejects it.
+
+Call this **LLM-assisted mapping critique**. **LLM-as-judge** is also a useful term
+when the model assesses a proposal against an explicit rubric, but its verdict is
+advisory. Today this is a manual practice alongside the Potato review; there is no
+integrated LLM critic or judge score in the current workflow.
+
+For example, consider this OpenSSH message:
+
+```text
+Accepted publickey for dbadmin from 10.20.30.40 port 45678 ssh2: RSA SHA256:abcdef1234567890
+```
+
+A proposal assigning `dbadmin` to `DvcHostname` and the client IP to `Dvc` can look
+plausible from field names alone. A critique grounded in the
+[Authentication schema](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-authentication)
+should explain the roles:
+
+| Evidence | Mapping | Reason |
+| --- | --- | --- |
+| `dbadmin` | `TargetUsername` | Account being authenticated |
+| `10.20.30.40` | `SrcIpAddr` | Client initiating authentication |
+| `45678` | `SrcPortNumber` | Client's source port |
+| Source-table `Computer` | `Dvc` | Server reporting the event; its identity is outside the message text |
+
+This discussion also revealed a setup improvement: for this OpenSSH source,
+`Dvc` can be supplied from `Computer` across templates. Correcting one mapping can
+therefore reduce future reviewer work.
+
+Give the critic the proposed mappings, selected schema and version, pinned
+catalogue, representative messages and template, available source-table columns
+and example values, and supplied mappings. Include relevant documentation or let
+it retrieve that guidance, retaining the references. Ask it to separate documented requirements,
+common parser conventions, and assumptions. Current online guidance can differ
+from the configured version; flag that difference instead of silently changing
+the target schema.
+
+For each disputed mapping, ask what the value represents, which ASIM field fits
+that role, what evidence supports the choice, and what remains uncertain. Request
+an alternative and the evidence that would change the recommendation. A fluent
+explanation or a familiar-looking value alone is insufficient. The reviewer can
+challenge the model, supply missing context, or leave the mapping unresolved.
+
+Keep the attempted mapping, relevant source and documentation references, model
+and prompt revision, proposed correction, and the reviewer's decision and rationale
+with the development record. Potato review notes can summarize the outcome and
+point to supporting artifacts. Route the finding to the part that needs changing:
+
+| Finding | Possible follow-up |
+| --- | --- |
+| A field has the wrong entity role | Correct the mapping and improve the worked example or reviewer guidance |
+| A value comes from shared source context | Correct the setup or supplied mappings |
+| The meaning is clear but the value cannot be extracted or normalized | Revisit extraction or conversion support |
+| The mapper or critic repeatedly overlooks a documented distinction | Refine its context, prompt, rubric, or a future meta-prompt that generates those instructions |
+| The expected answer, catalogue, or scoring rule conflicts with supported interpretations | Investigate the development case or evaluation harness and record the resolution |
+
+This is a feedback loop for both human learning and model development. Preserve
+disagreement long enough to investigate it; changing a harness or prompt should
+follow the resolved evidence, not merely make it agree with the critic. Accepted
+corrections can become worked examples and regression cases. Such cases remain
+development evidence; use the [evaluation guidance](evaluation.md#evaluating-an-llm-critic)
+to assess whether a change generalizes. Human approval and parser validation
+remain separate, and assisted discussions do not become independent gold labels.
+
 ## Compile reviewed mappings
 
 Compile saved mapping decisions through the existing compiler, supplying the frozen
