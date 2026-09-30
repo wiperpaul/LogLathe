@@ -218,6 +218,34 @@ separation is also consistent with
 [Matryoshka](https://arxiv.org/abs/2506.17512); this repository does not reuse that
 artifact's task labels as ASIM labels.
 
+## Evaluating an LLM critic
+
+[LLM-assisted mapping critique](operator-workflow.md#llm-assisted-critique-of-attempted-mappings)
+is a useful development checkpoint for a human or model's attempted mapping. It
+can also suggest changes to the harness, documentation context, mapping prompt,
+or a future meta-prompt. It is currently manual; the registered approaches and
+metrics above do not implement an LLM judge.
+
+If evaluated as an LLM-as-judge, freeze the candidate mapping, schema and catalogue
+revision, documentation context, model and prompt versions, and assessment rubric.
+Keep the original mapping, the critique, and the revised mapping separately so
+the critic's contribution can be assessed. Declare any native reference output
+shown to it, since that changes the evidence available for the assessment.
+
+Assess verified corrections, incorrect proposed changes, unresolved cases, and
+actual reviewer effort against independently adjudicated decisions. Agreement
+with the critic is not mapping accuracy. Reviewer acceptance and a useful
+explanation are informative, but do not by themselves demonstrate correctness or
+learning; assess learning through later unassisted review on fresh cases.
+
+Cases discussed while changing a prompt, meta-prompt, rubric, or scoring harness
+are development material. Evaluate the resulting change on untouched cases from
+a locked grouped split, and report any revised scoring rule or expected answer
+explicitly. A discovered evaluation error merits investigation and versioned
+correction; it does not justify silently rewriting held-out answers to match a
+model. The [dataset-curation evidence levels](dataset-curation.md#evidence-levels)
+continue to apply to any cases produced from assisted review.
+
 ## Controlled robustness
 
 The robustness runner generates variants from pinned seed cases and reports them

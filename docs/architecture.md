@@ -134,6 +134,15 @@ outputs are selected from the pinned catalogue and validated before compilation.
 The frozen template scopes constant outputs; unchanged sample values inside a
 capture do not establish a template constant.
 
+An attempted mapping also provides a concrete checkpoint for
+[LLM-assisted critique](operator-workflow.md#llm-assisted-critique-of-attempted-mappings).
+A model can compare the proposal with ASIM guidance, explain source and target
+roles, and help the reviewer challenge either a human or model-produced mapping.
+The discussion can improve reviewer guidance, setup, prompts or meta-prompts,
+extraction, and the evaluation harness. This is currently a manual engineering
+practice, not an integrated judge or an automatic approval stage. Its feedback
+retains the same separation from independent annotation and evaluation labels.
+
 ## Schema-ranking boundary
 
 `DeepParseClusterer` owns no schema state. Build orchestration creates a
