@@ -1,11 +1,16 @@
 # Jev schema-ranking experiment
 
-Status: experimental; offline checks pass, live quality is not established
+Status: experimental; initial live interoperability verified, general quality unestablished
 Audience: schema-ranking contributors and reviewers
 Canonical for: Jev request construction, execution, replay, and evaluation limits
 Last verified: 2026-09-30
 
 ## Decision and scope
+
+The [first live OpenSSH assessment](research/jev-schema-assessment-2026-09-30.md)
+completed 72 distinct requests and verified offline replay. It found useful
+semantic suggestions and unresolved diagnostic cases; the queue has no independent
+schema labels, so these observations are not an accuracy benchmark.
 
 Jev is a plausible decision engine at the existing schema-ranking boundary:
 source template evidence goes in, a schema suggestion comes out. LogLathe owns
