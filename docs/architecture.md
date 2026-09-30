@@ -75,6 +75,13 @@ are applied explicitly by the evaluation harness and are recorded in the report.
 
 ## Assisted mapping review
 
+The experimental [Jev schema ranker](jev-schema-experiment.md) consumes the same
+source-only semantic inputs in an opt-in evaluation path. Versioned ASIM
+definitions belong to LogLathe; provider distributions remain separate from
+lexical evidence counts. It does not change the build default, mapping approvals,
+or Potato task state. Cached responses and offline preparation/replay keep hosted
+inference outside normal CI.
+
 `mapping_review.py` consumes the existing verified annotation queue and registered
 mapping approaches. Each immutable task binds source evidence, catalogue,
 prediction, and optional native reference output. Reference answers are joined

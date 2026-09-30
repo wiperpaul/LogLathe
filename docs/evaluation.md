@@ -33,6 +33,12 @@ cases + pinned ASIM catalogue
 
 ## Comparison approaches
 
+The opt-in [Jev schema experiment](jev-schema-experiment.md) evaluates only the
+schema-ranking boundary through `evaluation schema-rank`. It uses existing cases
+or annotation queues, prepares requests offline by default, and requires explicit
+`--live` execution. It is not a registered field-mapping approach and does not
+alter the comparison defaults below.
+
 Running `evaluation compare` without `--approach` evaluates all seven registered
 approaches in the order below. The three priors appear first because every
 substantive result should be read against a class-imbalance floor, not against

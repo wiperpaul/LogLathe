@@ -1,0 +1,168 @@
+# Jev schema-ranking experiment
+
+Status: experimental; initial live interoperability verified, general quality unestablished
+Audience: schema-ranking contributors and reviewers
+Canonical for: Jev request construction, execution, replay, and evaluation limits
+Last verified: 2026-09-30
+
+## Decision and scope
+
+The [first live OpenSSH assessment](research/jev-schema-assessment-2026-09-30.md)
+completed 72 distinct requests and verified offline replay. It found useful
+semantic suggestions and unresolved diagnostic cases; the queue has no independent
+schema labels, so these observations are not an accuracy benchmark.
+
+Jev is a plausible decision engine at the existing schema-ranking boundary:
+source template evidence goes in, a schema suggestion comes out. LogLathe owns
+the ASIM definitions. Jev does not replace the catalogue, field mapper, Potato
+review, or deterministic compiler.
+
+The first experiment uses Authentication, NetworkSession, and AuditEvent, matching
+the current source-concept ranker's candidate set. The pinned catalogue contains
+more schemas; this is deliberately not a test of the whole ASIM taxonomy.
+`Unsupported` means none of these **available** definitions fits. It does not mean
+the event is impossible to represent in another ASIM schema.
+
+The repository currently has deterministic mapping baselines, not an existing
+hosted LLM classifier. This experiment compares Jev's schema decision with the
+existing `SourceConceptSchemaRanker`. Its lexical evidence counts remain separate
+from provider probabilities; neither is silently converted into the other.
+The experiment is exposed through `evaluation schema-rank`, rather than changing
+the default build or adding a second annotation workflow.
+
+## Definitions and evidence
+
+The versioned decision specification, `asim-primary-event-v1`, supplies owned
+summaries of Microsoft's [Authentication definition](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-authentication),
+[Network Session definition](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-network),
+and [Audit Event definition](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-audit).
+It asks about the event's primary action, rather than assigning NetworkSession
+because an event happens to contain an address or port. The definitions contain
+no vendor-specific demonstrations, SSH rules, field mappings, or gold examples.
+
+`--context template` sends just the template. The default, `enriched`, adds source
+vendor/product/table/message-column metadata when present, the first three event
+texts, and each parameter's first three values with a deterministic physical-type
+profile. It reuses the existing semantic input and slot profiler. A type such as
+IPv4 is evidence, not a decision about the address's role.
+
+Case IDs, cluster IDs, system identifiers, file paths, slot labels, expected
+answers, review notes, and reference-parser output do not enter the request body.
+Original template placeholders and event text remain source evidence and may
+themselves be revealing. This projection is not anonymization or a guarantee that
+the provider has never seen the underlying public logs. Inspect `requests.jsonl`
+before sending sensitive source data. Only its `body` is sent to TypeSafe.
+
+The adapter uses TypeSafe's documented [REST API](https://docs.typesafe.ai/api)
+without another runtime dependency. It pins `jev-1.13.0`; moving model aliases are
+rejected. One Choice asks for the schema. Optional `--nouls` adds a yes/no probe
+for each definition, phrased around the **primary** event. These probes do not
+consume the Choice answer or each other's answers.
+
+TypeSafe describes Choice [confidence](https://docs.typesafe.ai/confidence) as
+derived from the returned distribution. It is not an independent corroborating
+signal or measured ASIM accuracy. The Noul outputs are diagnostics, not
+statistically independent evidence to multiply together. No probability threshold
+approves a schema, mapping, or parser in this implementation.
+
+## Prepare without a key or network access
+
+Use an existing frozen annotation queue and its matching local catalogue:
+
+```powershell
+uv run asim-forge evaluation schema-rank `
+  artifacts/reference-pilot/openssh-potato/annotation `
+  --input-kind queue `
+  --catalog artifacts/asim-catalog `
+  --output artifacts/jev-openssh-prepare `
+  --limit 5
+```
+
+Alternatively, use the checked-in smoke-test case and catalogue. This single
+example checks the plumbing; it is not a quality benchmark:
+
+```powershell
+uv run asim-forge evaluation schema-rank `
+  examples/evaluation/semantic-mapping-cases.jsonl `
+  --catalog evaluation/ci-catalog `
+  --output artifacts/jev-example-prepare
+```
+
+Neither command downloads a catalogue, invokes Jev, nor requires credentials.
+The command writes `requests.jsonl` with exact outbound bodies and hashes, and
+`report.json` with baseline predictions, settings, and definition provenance.
+Use a new output directory for each run to preserve previous reports.
+
+## Run and replay
+
+Set `TYPESAFE_API_KEY` in the environment of the shell running the command, using
+your normal local secret-management process. Do not put it in repository config,
+request artifacts, or a command argument. Then explicitly opt into a hosted call:
+
+```powershell
+uv run asim-forge evaluation schema-rank `
+  artifacts/reference-pilot/openssh-potato/annotation `
+  --input-kind queue `
+  --catalog artifacts/asim-catalog `
+  --output artifacts/jev-openssh-live `
+  --cache artifacts/jev-cache `
+  --limit 5 --live
+```
+
+This sends source evidence to TypeSafe and may incur provider charges. Reuse the
+same arguments with `--replay` instead of `--live` and a new output directory to
+read cached results without a key or network. Live mode also reuses matching cache
+entries. Changing samples, definitions, model, catalogue revision, or questions
+changes the request identity and can require new calls. Cache directories contain
+provider results; request/report directories contain source evidence.
+
+Responses retain the model version, full Choice distribution, confidence,
+optional Noul values, and token usage. Reports distinguish cache hits and record
+elapsed time; cache-read latency is not provider latency. The client rejects
+missing answers, wrong models, unknown choices, invalid probabilities, and a
+selection that is not a maximum. A tied maximum is reported as `tied_top`, with
+no selected schema. `Unsupported` remains a semantic choice. Authentication,
+timeout, malformed-response, and cache errors are operational failures instead.
+
+HTTP 429 and 529 receive at most two retries with backoff; individual requests
+have a 45-second timeout. Other errors stop the batch, save a partial report, and
+return a nonzero exit. Successfully cached requests can be reused on the next
+run. Provider error bodies and credentials are excluded from artifacts. Tests
+mock transport: normal CI needs no Jev key, API calls, or external downloads.
+
+## Evaluate before integrating into review
+
+For labelled data, use existing canonical case JSONL. `mapped` cases score their
+schema; `not_applicable` cases score Unsupported; `unresolved` cases are excluded
+from accuracy. A mapped label outside the three available schemas is rejected,
+not relabelled as Unsupported. Queue-only trials have no ground truth and produce
+no accuracy claim. Reports retain label provenance so synthetic smoke tests can
+be distinguished from human-reviewed evaluation.
+
+For held-out evaluation, add `--split`, `--partition test`, `--case-groups`, and
+`--promotion-manifest` using artifacts from the existing
+[dataset curation workflow](dataset-curation.md). The command verifies frozen
+pre-label groups and selects only the evaluation partition before building
+requests. Labels and reference partitions never become demonstrations. An
+unsplit or limited run is exploratory, not evidence of held-out generalization.
+
+Compare four runs on the same frozen cases: template-only Choice, enriched Choice,
+template-only Choice plus Nouls, and enriched Choice plus Nouls. Keep definitions
+fixed while examining a test set; refine them on a separate development split.
+The lexical baseline always sees only the template. Consequently, an enriched
+Jev improvement alone cannot separate a model improvement from added context.
+
+Report both accuracy on completed labelled cases and completion rate. Failures
+and unrun cases must not disappear from the denominator unnoticed. A baseline
+abstention is not an Unsupported prediction. Inspect confusion between schemas,
+unsupported events, high-confidence mistakes, and disagreements with the probes.
+The current report has per-case outputs and simple schema accuracy; grouped
+uncertainty, calibration curves, cost comparisons, and field accuracy remain
+future evaluation work.
+
+The immediate human contribution is a small blind schema review spanning several
+source families, including ambiguous and out-of-scope events. Compare those
+decisions with Jev only after recording them. If it adds useful evidence, the
+next integration is an advisory schema suggestion in the existing Potato stage,
+followed by the existing schema-scoped mapper. Mapping critique by an LLM remains
+a separate opportunity, described in the [operator guide](operator-workflow.md).

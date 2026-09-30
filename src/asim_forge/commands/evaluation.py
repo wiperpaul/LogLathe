@@ -31,6 +31,7 @@ from ..semantic_mapping.comparison import (
 )
 from ..semantic_mapping.context_views import CONTEXT_VIEWS, VIEW_DESCRIPTIONS
 from ..semantic_mapping.statistics import DEFAULT_RESAMPLES
+from .schema_rank import register_schema_rank_parser, run_schema_rank_command
 
 
 def register_evaluation_parser(
@@ -45,6 +46,7 @@ def register_evaluation_parser(
         dest="evaluation_command",
         required=True,
     )
+    register_schema_rank_parser(evaluation_subparsers)
     evaluation_validate = evaluation_subparsers.add_parser(
         "validate",
         help="Validate canonical semantic mapping case JSONL",
@@ -251,7 +253,9 @@ def register_evaluation_parser(
 
 def run_evaluation_command(args: argparse.Namespace) -> None:
     """Dispatch one parsed evaluation subcommand."""
-    if args.evaluation_command == "queue":
+    if args.evaluation_command == "schema-rank":
+        run_schema_rank_command(args)
+    elif args.evaluation_command == "queue":
         queue_manifest = prepare_semantic_annotation_queue(
             args.build_dir,
             args.reviews,
