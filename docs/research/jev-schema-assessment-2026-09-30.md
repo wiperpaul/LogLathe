@@ -1,6 +1,6 @@
 # First live Jev schema assessment
 
-Status: exploratory; local review draft, not an accuracy benchmark
+Status: exploratory; official-parser agreement measured, not independent semantic accuracy
 Audience: reviewers of the Jev schema experiment
 Canonical for: observations from the first frozen OpenSSH trial
 Last verified: 2026-09-30
@@ -9,8 +9,10 @@ Last verified: 2026-09-30
 
 Jev is worth continuing as an advisory schema selector. It distinguished explicit
 login events from network-session evidence more usefully than the existing lexical
-baseline in this small sample. Enrichment also introduced a questionable schema
-change for a reverse-DNS diagnostic. Noul probes exposed uncertainty but changed
+baseline in this small sample. Joining the frozen official output subsequently
+showed that enrichment's reverse-DNS schema change agrees with the reference.
+Three other templates still disagree, including a high-confidence timeout result.
+Noul probes exposed uncertainty but changed
 none of the selected schemas and increased token usage. These observations do not
 justify automatic approval, calibrated thresholds, or a general accuracy claim.
 
@@ -71,10 +73,56 @@ over repeated live trials. Cache replay verifies artifact reuse, not model
 repeatability. The lexical baseline selected NetworkSession 12 times and
 abstained six times; it selected Authentication zero times.
 
-## Semantic review of the differences
+## Agreement with the pinned official parser
 
-The following interpretation is an **LLM-assisted post-hoc review**, not independent
-human adjudication. Microsoft describes Authentication around identity sign-in and
+The first qualitative assessment did not join Jev's results to the available
+native parser capture. That was a missing comparison step, not a lack of reference
+data. The existing `reference compare` evaluates candidate KQL outputs, and mapping
+review already exposes native reference examples; neither automatically scored
+this new schema-ranking experiment.
+
+The follow-up reused `reference_review_evidence` to verify fixture/capture hashes,
+the queue's exact build, and source-row identities and message text. All four
+configurations were replayed from cache with provider calls blocked. The join
+covers all 20 public source events represented in the 18 reviewed templates.
+The fixture's ten controlled variants were not classified by Jev and are excluded.
+
+Every joined native row has `EventSchema = Authentication`. These are actual
+emitted values from the [checked native capture](../../evaluation/reference/openssh/reference-output.json),
+not labels inferred from the parser name. The result is now a measurable
+**official-parser agreement** on the repository's `asim-parser-silver` track:
+
+| Approach | Template agreement | Source-event agreement |
+| --- | --- | --- |
+| Source-concept lexical baseline | 0/18 (0%) | 0/20 (0%) |
+| Jev, template-only Choice | 14/18 (77.8%) | 15/20 (75%) |
+| Jev, enriched Choice | 15/18 (83.3%) | 16/20 (80%) |
+| Jev, template-only Choice + Nouls | 14/18 (77.8%) | 15/20 (75%) |
+| Jev, enriched Choice + Nouls | 15/18 (83.3%) | 16/20 (80%) |
+| Constant Authentication sanity check, computed analytically | 18/18 (100%) | 20/20 (100%) |
+
+There are two events in the repeated-failure template and two in the timeout
+template. This explains the different event/template percentages; `EventCount`
+does not multiply votes. All outputs in this particular comparison were nonempty
+and schema-consistent. General comparison code excludes unlabelled, dropped, or
+mixed-schema cases from the relevant denominator and reports those states.
+
+The constant answer exposes the limitation: this fixture tests whether a classifier
+recovers one parser's behavior across varied messages, not whether it distinguishes
+several ASIM schemas. It is useful regression evidence and a concrete improvement
+over this lexical baseline, but does not establish cross-schema performance.
+
+The report also records reference rank and tied-rank bounds. Template-level mean
+reciprocal rank is 0.838–0.847 for template-only Jev, 0.894 for enriched Jev, and
+0.370–0.667 for the lexical baseline. Nouls do not change these values here. The
+wide baseline interval reflects tied evidence scores, including zero-evidence
+candidates; it is not proof of useful selections despite the 0/18 top-choice result.
+
+## Semantic review and reference disagreements
+
+The initial interpretation was an **LLM-assisted post-hoc review**, not independent
+human adjudication. The native reference now supplies additional implementation
+evidence for the cases below. Microsoft describes Authentication around identity sign-in and
 sign-out, and Network Session around network connections and sessions. That supports
 distinguishing the action in a login message from its accompanying IP/port evidence.
 See the [Authentication schema](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-authentication)
@@ -86,16 +134,23 @@ this post-hoc group, the baseline selected NetworkSession ten times and abstaine
 four times. This is useful qualitative evidence for semantic classification; it
 is not a measured accuracy improvement on a held-out labelled set.
 
-The remaining four templates deserve explicit human review. Descriptions below
+The remaining four templates exposed the important reference disagreements. Descriptions below
 are generalized to omit source usernames, hosts, addresses, and key fingerprints.
 Values are from the Choice-only runs unless otherwise stated.
 
 | Diagnostic | Template-only result | Enriched result | Review interpretation |
 | --- | --- | --- | --- |
-| Reverse-name lookup failed; break-in warning | Unsupported, probability 0.52, confidence 0.36 | Authentication, probability 0.55, confidence 0.40 | The only selection change. Source context may be anchoring the decision toward login activity without an explicit authentication outcome. More context is not automatically better evidence. |
-| Forward/reverse name mismatch; break-in warning | NetworkSession, probability 0.57, confidence 0.42 | NetworkSession, probability 0.51, confidence 0.35 | Low confidence in both views. A name-validation diagnostic does not clearly assert a network session. Unsupported within this candidate set remains plausible. |
-| Suspicious PTR record ignored | Unsupported, probability 0.63, confidence 0.50 | Unsupported, probability 0.56, confidence 0.41 | Plausible outside the three available schemas. The wording alone does not establish that a configuration change occurred. |
-| Client stopped responding; session timeout | NetworkSession, probability 0.99, confidence 0.99 | NetworkSession, probability 0.96, confidence 0.95 | A network/session interpretation is plausible, but whether this should represent an authenticated-session sign-out needs source-specific semantics. |
+| Reverse-name lookup failed; break-in warning | Unsupported, probability 0.52, confidence 0.36 | Authentication, probability 0.55, confidence 0.40 | Reference: Authentication / Logon / Failure. Enrichment improves reference agreement, despite low confidence. The earlier qualitative concern did not establish this change was wrong. |
+| Forward/reverse name mismatch; break-in warning | NetworkSession, probability 0.57, confidence 0.42 | NetworkSession, probability 0.51, confidence 0.35 | Reference: Authentication / Logon / Failure. Both views disagree with the parser's treatment of a login-policy failure. |
+| Suspicious PTR record ignored | Unsupported, probability 0.63, confidence 0.50 | Unsupported, probability 0.56, confidence 0.41 | Reference: Authentication / Logon / Failure. Unsupported is a reference mismatch, even though generic wording alone made it seem plausible. |
+| Client stopped responding; session timeout | NetworkSession, probability 0.99, confidence 0.99 | NetworkSession, probability 0.96, confidence 0.95 | Reference: Authentication / Logoff / Success. This is a high-confidence reference mismatch, not a successful rejection of Authentication. |
+
+The [pinned parser branches](../../evaluation/reference/openssh/parser.yaml) explicitly
+model the three name-resolution diagnostics as blocked logons with
+`EventResultDetails = Logon violates policy`, and the timeout as a successful
+logoff. These facts correct the earlier text-only interpretation. Agreement with
+that implementation is the measured target here; an independent semantic challenge
+to an upstream decision would remain a separate, reviewable issue.
 
 With enriched Nouls, the reverse-lookup warning selected Authentication with
 probability 0.50 and confidence 0.33, while its primary-Authentication probe was
@@ -122,8 +177,11 @@ Nouls as optional diagnostics. Their extra token usage bought no selection chang
 in this trial, though it revealed disagreements worth studying. Keep both context
 views available until independent labels show whether enrichment helps.
 
-The most useful human contribution now is adjudicating the three name-resolution
-diagnostics and the session-timeout boundary. Then collect a small, diverse blind
+The next automated step is to add pinned fixtures from different schema families
+and run the same blinded classifier and native-output join. The three remaining
+enriched reference mismatches already identify concrete cases to investigate.
+Human review can then assess whether the desired behavior should follow the
+reference parser or record a justified disagreement. Also collect a small, diverse blind
 schema set containing real network activity, configuration changes, authentication,
 and events outside the available schemas. The current sample cannot establish
 AuditEvent performance, broad rejection quality, or generalization across vendors.
@@ -137,7 +195,12 @@ and parser compilation were not evaluated in this run.
 ## Local audit trail and publication boundary
 
 Raw requests, responses, caches, timings, and the aggregate JSON remain under the
-ignored `artifacts/jev-assessment-2026-09-30` and `artifacts/jev-cache` directories. ( keeping in notes in case repeated I am not commiting artifactss repos atm )
+ignored `artifacts/jev-assessment-2026-09-30` and `artifacts/jev-cache` directories.
+They are not committed to the repository. The
+[preservation recipe](../jev-schema-experiment.md#preserve-and-replay-a-reported-trial)
+reuses the existing release policy for a reviewed archive, without another
+publishing workflow. Until that archive is published, a fresh public checkout alone
+cannot reproduce these live-trial numbers.
 This note contains aggregate results and generalized event descriptions. It does
 not contain the credential, authorization headers, raw messages, or fingerprints.
 The key was loaded from a Windows-encrypted file outside the repository into the
@@ -149,3 +212,9 @@ response content. Local `summary.json` records the original report hashes and
 checks input alignment and unique live-request counts. No new live calls are
 needed to inspect these results. See the [experiment guide](../jev-schema-experiment.md)
 for request construction and replay commands.
+
+The offline native comparisons are under the same assessment directory in
+`reference-comparison/<configuration>/reference-agreement.json`. They contain
+per-case/per-event labels, selections, rank bounds, coverage states, and the native
+capture checksum. These labels were attached after prediction and did not change
+the frozen Jev requests, cached answers, or the original no-gold-label metrics.

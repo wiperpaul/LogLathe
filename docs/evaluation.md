@@ -396,3 +396,8 @@ remote sources and try to load the latest prior `eval-*` report for comparable
 deltas. Failed or partial runs do not reach the release job.
 Keep any report cited by a paper, thesis, or release under a stable tag before
 applying a future prerelease-retention policy.
+
+For hosted schema-ranking trials, reuse these release and redistribution boundaries
+with the [Jev preservation recipe](jev-schema-experiment.md#preserve-and-replay-a-reported-trial).
+Its manually reviewed replay archive is an optional additional release asset;
+the corpus workflow does not collect or publish local provider caches or reviews.

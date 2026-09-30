@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -13,12 +14,14 @@ from ..evaluation_splits import (
     select_semantic_split,
     validate_semantic_case_groups,
 )
+from ..reference.evidence import reference_review_evidence
 from ..schema_ranking.jev import DEFAULT_MODEL, SCHEMA_DEFINITIONS
 from ..schema_ranking.jev_experiment import (
     SchemaExperimentInput,
     from_labelled_case,
     run_schema_experiment,
 )
+from ..schema_ranking.reference_assessment import compare_schema_reference
 from ..semantic_annotation import validate_semantic_promotion_artifacts
 from ..semantic_annotation.artifacts import load_semantic_annotation_queue
 
@@ -51,9 +54,23 @@ def register_schema_rank_parser(
     )
     parser.add_argument("--case-groups", type=Path)
     parser.add_argument("--promotion-manifest", type=Path)
+    parser.add_argument("--reference-fixture", type=Path, help="Optional pinned parser fixture")
+    parser.add_argument("--reference-bundle", type=Path, help="Prepared bundle matching the queue")
+    parser.add_argument("--reference-capture", type=Path, help="Verified native reference capture")
 
 
 def run_schema_rank_command(args: argparse.Namespace) -> None:
+    reference_paths = (args.reference_fixture, args.reference_bundle, args.reference_capture)
+    attach_reference = any(path is not None for path in reference_paths)
+    if attach_reference and (
+        not all(path is not None for path in reference_paths)
+        or args.input_kind != "queue"
+        or not (args.live or args.replay)
+    ):
+        raise EvaluationError(
+            "Reference agreement requires --input-kind queue, --live or --replay, and all of "
+            "--reference-fixture, --reference-bundle, --reference-capture"
+        )
     catalog = load_catalog(args.catalog)
     revision = catalog.manifest.resolved_revision
     if not set(SCHEMA_DEFINITIONS).issubset(catalog.manifest.schemas):
@@ -65,6 +82,7 @@ def run_schema_rank_command(args: argparse.Namespace) -> None:
     if args.partition is not None and args.split is None:
         raise EvaluationError("--partition requires --split")
     split_provenance = None
+    reference = None
     if args.input_kind == "queue":
         if args.split:
             raise EvaluationError("Grouped splits require labelled cases, not an annotation queue")
@@ -72,6 +90,15 @@ def run_schema_rank_command(args: argparse.Namespace) -> None:
         if manifest.catalogue_revision != revision:
             raise EvaluationError("Queue and catalogue revisions differ")
         inputs = [SchemaExperimentInput(case_id=task.case_id, source=task.input) for task in tasks]
+        if attach_reference:
+            # Verify before any paid calls, but never pass reference answers to the provider.
+            reference = reference_review_evidence(
+                args.reference_fixture,
+                args.reference_bundle,
+                args.reference_capture,
+                tasks,
+                catalog,
+            )
     else:
         cases = load_semantic_mapping_cases(args.input)
         if any(case.catalogue_revision != revision for case in cases):
@@ -105,6 +132,19 @@ def run_schema_rank_command(args: argparse.Namespace) -> None:
         api_key=os.environ.get("TYPESAFE_API_KEY", "") if args.live else "",
         split_provenance=split_provenance,
     )
+    if reference is not None:
+        selected_reference = {item.case_id: reference[item.case_id] for item in inputs}
+        agreement = compare_schema_reference(report, selected_reference)
+        (args.output / "reference-agreement.json").write_text(
+            json.dumps(agreement, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        for name, scores in agreement["approaches"].items():
+            templates, events = scores["templates"], scores["events"]
+            print(
+                f"Reference schema agreement ({name}): "
+                f"{templates['agreed']}/{templates['eligible']} eligible templates; "
+                f"{events['agreed']}/{events['eligible']} eligible represented events"
+            )
     print(
         f"Jev {report['mode']}: {len(inputs)} input(s), {report['completed']} completed, "
         f"{report['cache_hits']} cache hit(s). Artifacts: {args.output}"

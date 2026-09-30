@@ -132,6 +132,118 @@ mock transport: normal CI needs no Jev key, API calls, or external downloads.
 
 ## Evaluate before integrating into review
 
+### Compare with official parser output offline
+
+The existing native capture can supply implementation-derived schema labels for
+this queue. Attach it to a cached replay to score both Jev and the lexical baseline:
+
+```powershell
+uv run asim-forge evaluation schema-rank `
+  artifacts/reference-pilot/openssh-potato/annotation `
+  --input-kind queue --catalog artifacts/asim-catalog `
+  --output artifacts/jev-reference-check --cache artifacts/jev-cache `
+  --context enriched --replay `
+  --reference-fixture evaluation/reference/openssh `
+  --reference-bundle artifacts/reference-pilot/openssh-potato `
+  --reference-capture evaluation/reference/openssh/reference-output.json
+```
+
+All three reference options are required together and are available for queue
+inputs in live or replay mode. Reference fixture, capture, source-row identity,
+message text, and queue/build hashes are verified using the existing review
+evidence join before any paid call. Reference evidence never enters Jev's request.
+
+The additional `reference-agreement.json` reports top-choice agreement and the
+reference schema's rank, separately per template and represented source event.
+Labels come from `EventSchema` in actual emitted rows, not the parser's declared
+schema or directory name. A dropped event is unscorable for schema agreement; it
+does not become Unsupported. Missing schemas, partial coverage, and mixed-schema
+templates are reported explicitly rather than receiving an invented majority
+label. Multiple output rows with the same schema receive one source-event vote.
+The comparison covers representative events in reviewed templates, not every
+event in an arbitrary corpus or the fixture's additional controlled variants.
+
+Tied scores produce a minimum/maximum rank and corresponding mean reciprocal
+rank bounds. No alphabetical tie-breaking improves a rank. Baseline abstentions
+still have rankings but cannot count as top-choice agreement. A target outside
+the candidate set is a miss with reciprocal rank zero. This is
+`asim-parser-silver`: agreement with a pinned implementation, not independent
+semantic accuracy. A single-schema fixture also admits a trivial constant-schema
+answer; multi-schema fixtures are needed for a useful broader comparison.
+
+### Preserve and replay a reported trial
+
+Reuse the [existing release policy](evaluation.md#automation-and-release-policy).
+Its workflow publishes corpus benchmark reports; it does not currently package
+Jev caches or annotation queues. For an occasional Jev assessment, keep a manually
+reviewed ZIP beside those reports as an additional release asset. No new publisher,
+corpus registration, or CI download is needed. A local ZIP is a preservation copy,
+not a publicly reproducible result until the accompanying files are available.
+
+For the first OpenSSH trial, preserve only this allowlist, retaining repository-relative
+paths so extraction into a separate checkout restores the documented commands:
+
+| Evidence | Files to preserve |
+| --- | --- |
+| Frozen reference build | `artifacts/reference-pilot/openssh-potato/prepared-manifest.json` and exactly the files in its `files` map |
+| Reviewed queue | Its `annotation/queue-manifest.json`, `tasks.jsonl`, `submission-schema.json`, and `cluster-review.user_state.json` |
+| Provider answers | The 72 `artifacts/jev-cache/<request_hash>.json` files referenced by the four trial reports |
+| Original experiment | `requests.jsonl` and `report.json` for `template-choice`, `enriched-choice`, `template-nouls`, `enriched-nouls`, and `smoke-enriched-nouls` under `artifacts/jev-assessment-2026-09-30/` |
+| Measurements | `summary.json`, its small aggregation script, and the four `reference-comparison/<configuration>/reference-agreement.json` files |
+
+The smoke report retains the original live timings for five reused requests; those
+are not five additional cases. Preserve the exact queue rather than asking another
+reviewer to recreate the same approvals. Original local path strings in build
+metadata are provenance, not required execution paths; do not rewrite hashed files.
+
+Include a plain JSON inventory with the reproduction code commit, original live
+implementation commit, dependency-lock hash, per-file SHA-256 digests, and hashes
+of the repository files on which replay depends. Keep the OpenSSH fixture, native
+capture, upstream licence, and catalogue in their existing checked-in locations.
+`evaluation/ci-catalog` is byte-identical to the catalogue used for this trial, so
+the ZIP does not need another catalogue or upstream-data copy. Archive only the
+allowlisted files, not an entire artifacts directory or machine environment.
+
+On a checkout of the recorded reproduction commit, install the locked environment
+with `uv sync --locked`, verify the inventory hashes, then replay all four runs:
+
+```powershell
+foreach ($context in 'template', 'enriched') {
+    foreach ($questions in 'choice', 'nouls') {
+        $extra = @()
+        if ($questions -eq 'nouls') { $extra += '--nouls' }
+        uv run --no-sync asim-forge evaluation schema-rank `
+          artifacts/reference-pilot/openssh-potato/annotation `
+          --input-kind queue --catalog evaluation/ci-catalog `
+          --output "artifacts/jev-reproduced/$context-$questions" `
+          --cache artifacts/jev-cache --context $context --replay @extra `
+          --reference-fixture evaluation/reference/openssh `
+          --reference-bundle artifacts/reference-pilot/openssh-potato `
+          --reference-capture evaluation/reference/openssh/reference-output.json
+        if ($LASTEXITCODE -ne 0) { throw 'Replay failed' }
+    }
+}
+```
+
+Each run must complete with 18 cache hits. Compare the generated request bodies,
+parsed provider responses, and `reference-agreement.json` with the originals.
+Elapsed times, live/replay mode, and cache-hit flags legitimately differ. Recompute
+the original latency/token summary from the saved live reports, not replay timings.
+After dependency installation this requires no provider key, Docker, catalogue
+sync, or network access. Missing cache entries fail instead of calling the API.
+This reproduces the reported analysis; a new hosted-model run is a separate trial.
+
+Keep the ZIP and its checksum local until the source content, review metadata, and
+credential exposure have been reviewed. For a publication, attach the approved ZIP
+to a stable release under the existing policy and cite that exact version. The
+default 30-day workflow artifact retention is not a publication archive. Preserve
+the evidence limits in the [assessment](research/jev-schema-assessment-2026-09-30.md):
+official-parser agreement, a single source family and reference schema, and no
+independent semantic labels. Reproducibility does not turn this inspected queue
+into an untouched test set.
+
+### Independently labelled evaluation
+
 For labelled data, use existing canonical case JSONL. `mapped` cases score their
 schema; `not_applicable` cases score Unsupported; `unresolved` cases are excluded
 from accuracy. A mapped label outside the three available schemas is rejected,
