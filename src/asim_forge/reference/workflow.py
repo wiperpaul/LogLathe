@@ -31,7 +31,7 @@ _EVIDENCE_FILES = (
 def prepare(fixture_dir: Path, output_dir: Path) -> PreparedBundle:
     fixture, fixture_hash = load_fixture(fixture_dir)
     seeds = source_events(fixture_dir, fixture)
-    events = seeds + controlled_variants(seeds)
+    events = seeds + (controlled_variants(seeds) if fixture.mutation_suite == "openssh-v1" else [])
     if output_dir.exists() and any(output_dir.iterdir()):
         raise ValueError("Use an empty output directory to preserve existing review evidence")
     input_dir = output_dir / "input"

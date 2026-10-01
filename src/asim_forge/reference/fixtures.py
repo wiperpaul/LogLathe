@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import math
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,19 +33,22 @@ def load_fixture(path: Path) -> tuple[ReferenceFixture, str]:
             raise ValueError("Fixture resource escapes its directory")
         if digest(target.read_bytes()) != resource.sha256:
             raise ValueError(f"Fixture resource checksum mismatch: {resource.file}")
-    return fixture, digest(canonical(fixture.model_dump(mode="json")))
+    # Preserve existing v1 capture identities when adding optional ingestion metadata.
+    excluded = {"csv_column_names", "setup_file"} if fixture.format_version == "1" else set()
+    return fixture, digest(canonical(fixture.model_dump(mode="json", exclude=excluded)))
 
 
 def source_events(path: Path, fixture: ReferenceFixture) -> list[ReferenceEvent]:
     with (path / fixture.csv_file).open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        if set(reader.fieldnames or []) != set(fixture.columns):
+        headers = {name: fixture.csv_column_names.get(name, name) for name in fixture.columns}
+        if set(reader.fieldnames or []) != set(headers.values()):
             raise ValueError("CSV columns differ from the declared source-table shape")
         events = []
         for number, row in enumerate(reader, 1):
             values: dict[str, Any] = {}
             for name, kind in fixture.columns.items():
-                value = row[name]
+                value = row[headers[name]]
                 if value is None:
                     raise ValueError(f"Missing CSV cell at row {number}: {name}")
                 if kind == "datetime":
@@ -55,6 +59,10 @@ def source_events(path: Path, fixture: ReferenceFixture) -> list[ReferenceEvent]
                     )
                 elif kind in ("int", "long"):
                     values[name] = int(value) if value else None
+                elif kind == "real":
+                    values[name] = float(value) if value else None
+                    if values[name] is not None and not math.isfinite(values[name]):
+                        raise ValueError(f"Non-finite source value at row {number}: {name}")
                 elif kind == "string":
                     values[name] = value
                 else:
@@ -145,6 +153,8 @@ def event_fingerprint(events: list[ReferenceEvent]) -> str:
 def reference_program(path: Path, fixture: ReferenceFixture) -> str:
     """Wrap exact upstream bodies as query-local functions; install nothing remotely."""
     parts = []
+    if fixture.setup_file:
+        parts.append((path / fixture.setup_file).read_text(encoding="utf-8").rstrip())
     for name in fixture.helpers:
         helper = yaml.safe_load((path / name).read_text(encoding="utf-8"))
         parameters = []
@@ -189,6 +199,14 @@ def source_query(fixture: ReferenceFixture, event: ReferenceEvent, program: str)
             if type(value) is not int:
                 raise ValueError(f"Expected integer source value for {name}")
             cells.append(f"{kind}({value})")
+        elif kind == "real":
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+            ):
+                raise ValueError(f"Expected finite real source value for {name}")
+            cells.append(f"real({value})")
         else:
             raise ValueError(f"Unsupported fixture literal type: {kind}")
     return (

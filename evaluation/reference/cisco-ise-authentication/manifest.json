@@ -1,0 +1,79 @@
+{
+  "format_version": "2",
+  "fixture_id": "cisco-ise-authentication-v1",
+  "track": "asim-parser-silver",
+  "group_id": "cisco-ise",
+  "source_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_name": "Authentication",
+  "schema_version": "0.1.4",
+  "source_table": "Syslog",
+  "message_field": "SyslogMessage",
+  "vendor": "Cisco",
+  "product": "ISE",
+  "csv_file": "source.csv",
+  "parser_file": "parser.yaml",
+  "helpers": [
+    "get-username-type.yaml",
+    "resolve-fqdn.yaml",
+    "resolve-src.yaml"
+  ],
+  "columns": {
+    "TenantId": "string",
+    "SourceSystem": "string",
+    "TimeGenerated": "datetime",
+    "MG": "string",
+    "Computer": "string",
+    "EventTime": "datetime",
+    "Facility": "string",
+    "HostName": "string",
+    "SeverityLevel": "string",
+    "SyslogMessage": "string",
+    "ProcessID": "int",
+    "HostIP": "string",
+    "ProcessName": "string",
+    "Type": "string",
+    "_ResourceId": "string",
+    "EventOriginalType": "string"
+  },
+  "csv_column_names": {
+    "TimeGenerated": "TimeGenerated [UTC]",
+    "EventTime": "EventTime [UTC]"
+  },
+  "datetime_format": "%m/%d/%Y, %I:%M:%S.%f %p",
+  "resources": [
+    {
+      "file": "source.csv",
+      "source_path": "Sample Data/ASIM/cisco_ise_asim_auth.csv",
+      "sha256": "57c2d2b1b80e581508e7907e3427cbe5cdf82753105637f561798bf6b797014d"
+    },
+    {
+      "file": "parser.yaml",
+      "source_path": "Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoISE.yaml",
+      "sha256": "85335ef45e01134fd6526248df1ef4e746d831bbfafe3487191286563fbf6623"
+    },
+    {
+      "file": "LICENSE.upstream",
+      "source_path": "LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    },
+    {
+      "file": "get-username-type.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_GetUsernameType.yaml",
+      "sha256": "3281d68454af0dfa98bd5e217a467d1ef4a4e40150932fb2496dec0643add5f3"
+    },
+    {
+      "file": "resolve-fqdn.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveFQDN.yaml",
+      "sha256": "bf594fe8b3e6c2413a2999bc539e1c2a09dfc4369d130087bd824a38eb91130a"
+    },
+    {
+      "file": "resolve-src.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveSrcFQDN.yaml",
+      "sha256": "c019837a7709b1f9275b54042bee9cefd86f55956ef0c3a97a5efcc5b4841f53"
+    }
+  ],
+  "redistribution": "content",
+  "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
+  "mutation_suite": "none"
+}

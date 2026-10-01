@@ -10,6 +10,10 @@ variants. The upstream parser and its three helpers are pinned to Azure-Sentinel
 commit `027a0f9338bfabcb27b784571b771c54572ebf01`. Checked native Kusto output is
 available in [the fixture directory](../evaluation/reference/openssh).
 
+The [mixed fixture inventory](../evaluation/reference/README.md) adds Cisco ISE
+and Barracuda WAF samples, a source-family partition plan, and checked captures.
+It records native selection gaps explicitly; sample filenames are not labels.
+
 This is `asim-parser-silver`: functional regression evidence against a particular
 implementation. It is separate from the corpus benchmark and from semantic gold.
 Public examples, generated variants, and independently reviewed labels remain

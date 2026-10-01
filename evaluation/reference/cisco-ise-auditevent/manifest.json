@@ -1,0 +1,67 @@
+{
+  "format_version": "2",
+  "fixture_id": "cisco-ise-auditevent-v1",
+  "track": "asim-parser-silver",
+  "group_id": "cisco-ise",
+  "source_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_name": "AuditEvent",
+  "schema_version": "0.1.0",
+  "source_table": "Syslog",
+  "message_field": "SyslogMessage",
+  "vendor": "Cisco",
+  "product": "ISE",
+  "csv_file": "source.csv",
+  "parser_file": "parser.yaml",
+  "helpers": [
+    "get-username-type.yaml"
+  ],
+  "columns": {
+    "TenantId": "string",
+    "SourceSystem": "string",
+    "TimeGenerated": "datetime",
+    "MG": "string",
+    "Computer": "string",
+    "EventTime": "datetime",
+    "Facility": "string",
+    "HostName": "string",
+    "SeverityLevel": "string",
+    "SyslogMessage": "string",
+    "ProcessID": "int",
+    "HostIP": "string",
+    "ProcessName": "string",
+    "Type": "string",
+    "_ResourceId": "string",
+    "EventOriginalType": "string"
+  },
+  "csv_column_names": {
+    "TimeGenerated": "TimeGenerated [UTC]",
+    "EventTime": "EventTime [UTC]"
+  },
+  "datetime_format": "%m/%d/%Y, %I:%M:%S.%f %p",
+  "resources": [
+    {
+      "file": "source.csv",
+      "source_path": "Sample Data/ASIM/asim_cisco_ise_auditevent.csv",
+      "sha256": "63814d532a4488ac02da87f8d30f7d30c8b64ee1c4c60ae73839f5b3ad201017"
+    },
+    {
+      "file": "parser.yaml",
+      "source_path": "Parsers/ASimAuditEvent/Parsers/ASimAuditEventCiscoISE.yaml",
+      "sha256": "2a7130b947a3ca61bf5e45c18b75217bbdde387bb44f868c576de5c6105cbf66"
+    },
+    {
+      "file": "LICENSE.upstream",
+      "source_path": "LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    },
+    {
+      "file": "get-username-type.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_GetUsernameType.yaml",
+      "sha256": "3281d68454af0dfa98bd5e217a467d1ef4a4e40150932fb2496dec0643add5f3"
+    }
+  ],
+  "redistribution": "content",
+  "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
+  "mutation_suite": "none"
+}
