@@ -23,24 +23,23 @@ divide rows or allocate different schemas from one product to different splits.
 | Partition | Source | Intended sample schema | Public inputs | Inputs with native output |
 | --- | --- | --- | ---: | ---: |
 | train / development | OpenSSH | Authentication | 20 | 20 |
-| validation | Cisco ISE | Authentication | 30 | 0 |
-| validation | Cisco ISE | NetworkSession | 20 | 1 |
-| validation | Cisco ISE | AuditEvent | 20 | 20 |
+| validation | Cisco Meraki | Authentication | 18 | 18 |
+| validation | Cisco Meraki | NetworkSession | 13 | 13 |
+| validation | Cisco Meraki | AuditEvent | 21 | 21 |
 | test | Barracuda WAF | Authentication | 15 | 15 |
 | test | Barracuda WAF | NetworkSession | 15 | 15 |
 | test | Barracuda WAF | AuditEvent | 15 | 15 |
 
-Total: 135 public input rows in three source families. OpenSSH's ten controlled
+Total: 117 public input rows in three source families. OpenSSH's ten controlled
 variants are additional regression probes, excluded from this public-row count.
 The new fixtures have no generated variants. Only OpenSSH has already undergone
 human cluster review and the reported Jev trial; new clusters are not approved.
 
-The test source supplies a balanced 45-event, three-schema comparison. The Cisco
-validation source is deliberately retained despite its poor reference coverage;
-it cannot currently validate Authentication performance. Report coverage and
-per-schema agreement separately. Do not score its 49 dropped inputs as Unsupported,
-silently remove them, or give them labels from their filenames. Three source
-families are still insufficient for a broad generalization claim, and public
+The test source supplies a balanced 45-event, three-schema comparison, and the
+validation source supplies 52 events across the same three schemas. Report
+coverage and per-schema agreement separately; do not treat any future dropped
+input as Unsupported or infer its label from a filename. Three source families
+are still insufficient for a broad generalization claim, and public
 samples may have appeared in a provider's training data.
 
 Freeze model definitions before looking at test predictions. Keep test results
@@ -51,19 +50,28 @@ capture integrity is not blind independent semantic adjudication.
 ## Ingestion and upstream limitations
 
 CSV bytes are unchanged. Format-2 manifests explicitly map export headers such as
-`TimeGenerated [UTC]` to their source-table names and declare source types. Cisco
-timestamps include fractional seconds; Barracuda numeric `_d` columns are real.
+`TimeGenerated [UTC]` to their source-table names and declare source types. Meraki
+exports use three timestamp formats, recorded per fixture; Barracuda numeric `_d`
+columns are real.
 Messages go to clustering unchanged; additional CSV metadata, filenames, declared
 schemas, and native outputs must not enter a model's source-message prompt.
 
-Cisco ISE samples contain an `EventOriginalType` column, but reference labels come
-only from emitted `EventSchema`. The pinned Authentication parser requires a
-message beginning with a ten-digit sequence; these exported messages begin with
-a timestamp fragment. Its native capture therefore contains 30 empty outputs.
-The NetworkSession lookup selects only the `5406` sample; the other sample codes
-are absent from that pinned parser's accepted code list. The AuditEvent parser
-selects all 20 samples. These are reproducible sample/parser mismatches, not Jev
-errors. Neither logs nor official KQL were repaired to manufacture coverage.
+Meraki Authentication and AuditEvent samples use `meraki_CL.Message` and their
+matching custom-table parsers. NetworkSession uses `Syslog.SyslogMessage` and the
+Syslog parser variant. Its pinned `source-setup.kql` supplies
+`_ASIM_GetSourceBySourceType` with the sample computers registered as CiscoMeraki
+sources. This is explicit local source configuration, not a test of Sentinel's
+watchlist service. It supplies no event labels and changes no source messages.
+All normalization helpers and parser bodies are exact upstream bytes.
+
+Split version 2 replaces Cisco ISE before any new live Jev trial. The ISE sample
+sets yielded 0/30 Authentication, 1/20 NetworkSession, and 20/20 AuditEvent outputs.
+On 2026-10-01, all three parser files and all three sample files were compared
+byte-for-byte with upstream head `cfb3c3ded5cb65c907abb6b71b28b9ed25806ee2` and were
+unchanged. Updating the pin therefore would not fix this sample/parser mismatch.
+ISE is excluded from the active fixture set; we did not repair its inputs, tune
+against its scores, or start an upstream issue investigation. The previous local
+captures remain in ignored artifacts for provenance.
 
 Barracuda uses already ingested `barracuda_CL` columns. Its Authentication parser
 also references `CommonSecurityLog`; `source-setup.kql` explicitly supplies that
@@ -78,7 +86,7 @@ identity. They do not fabricate source records or schema labels.
 Use the same commands as OpenSSH, for example:
 
 ```console
-uv run asim-forge reference prepare evaluation/reference/cisco-ise-auditevent --output artifacts/mixed-reference/cisco-ise-auditevent
+uv run asim-forge reference prepare evaluation/reference/cisco-meraki-auditevent --output artifacts/mixed-reference/cisco-meraki-auditevent
 ```
 
 Repeat for each fixture in the split. Every prepared bundle contains the ordinary

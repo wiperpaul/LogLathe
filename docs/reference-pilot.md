@@ -10,7 +10,7 @@ variants. The upstream parser and its three helpers are pinned to Azure-Sentinel
 commit `027a0f9338bfabcb27b784571b771c54572ebf01`. Checked native Kusto output is
 available in [the fixture directory](../evaluation/reference/openssh).
 
-The [mixed fixture inventory](../evaluation/reference/README.md) adds Cisco ISE
+The [mixed fixture inventory](../evaluation/reference/README.md) adds Cisco Meraki
 and Barracuda WAF samples, a source-family partition plan, and checked captures.
 It records native selection gaps explicitly; sample filenames are not labels.
 

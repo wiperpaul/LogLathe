@@ -10,7 +10,7 @@ Potato is an optional review dependency and is not vendored.
 https://github.com/davidjurgens/potato
 License: GNU General Public License v3.0 or later
 
-Microsoft Azure-Sentinel OpenSSH, Cisco ISE, and Barracuda WAF samples,
+Microsoft Azure-Sentinel OpenSSH, Cisco Meraki, and Barracuda WAF samples,
 ASIM parsers, and helper functions
 Copyright Microsoft Corporation.
 https://github.com/Azure/Azure-Sentinel

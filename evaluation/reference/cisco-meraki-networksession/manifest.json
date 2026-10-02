@@ -1,8 +1,8 @@
 {
   "format_version": "2",
-  "fixture_id": "cisco-ise-networksession-v1",
+  "fixture_id": "cisco-meraki-networksession-v1",
   "track": "asim-parser-silver",
-  "group_id": "cisco-ise",
+  "group_id": "cisco-meraki",
   "source_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
   "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
   "schema_name": "NetworkSession",
@@ -10,19 +10,19 @@
   "source_table": "Syslog",
   "message_field": "SyslogMessage",
   "vendor": "Cisco",
-  "product": "ISE",
+  "product": "Meraki",
   "csv_file": "source.csv",
   "parser_file": "parser.yaml",
   "helpers": [
-    "get-username-type.yaml",
     "resolve-fqdn.yaml",
-    "resolve-src.yaml"
+    "resolve-dvc.yaml",
+    "resolve-icmp-type.yaml",
+    "resolve-network-protocol.yaml"
   ],
   "columns": {
     "TenantId": "string",
     "SourceSystem": "string",
     "TimeGenerated": "datetime",
-    "MG": "string",
     "Computer": "string",
     "EventTime": "datetime",
     "Facility": "string",
@@ -32,25 +32,26 @@
     "ProcessID": "int",
     "HostIP": "string",
     "ProcessName": "string",
+    "MG": "string",
     "Type": "string",
     "_ResourceId": "string",
-    "EventOriginalType": "string"
+    "CollectorHostName": "string"
   },
   "csv_column_names": {
     "TimeGenerated": "TimeGenerated [UTC]",
     "EventTime": "EventTime [UTC]"
   },
-  "datetime_format": "%m/%d/%Y, %I:%M:%S.%f %p",
+  "datetime_format": "%d-%m-%y %H:%M",
   "resources": [
     {
       "file": "source.csv",
-      "source_path": "Sample Data/ASIM/asim_cisco_ise_network.csv",
-      "sha256": "f9ff3835da4f5ff8d84b270f473c47946d8dbb854ff1b99142caed92db3760b9"
+      "source_path": "Sample Data/ASIM/Cisco_Meraki_NetworkSession_IngestedLogs.csv",
+      "sha256": "8405b67d3e0db1da89975a30465e0e0517d1ebf5f0ffff820c7c3becef1ed166"
     },
     {
       "file": "parser.yaml",
-      "source_path": "Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCiscoISE.yaml",
-      "sha256": "83163f2317e5919d9609ca17214301dbb14fddb8b9e1f23fa58341f25219ddf8"
+      "source_path": "Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionCiscoMerakiSyslog.yaml",
+      "sha256": "c79d4cb4299fd5f0324e16bb51c201a39ec16d10e97019ddfded128fb5951aa5"
     },
     {
       "file": "LICENSE.upstream",
@@ -58,22 +59,33 @@
       "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
     },
     {
-      "file": "get-username-type.yaml",
-      "source_path": "ASIM/lib/functions/ASIM_GetUsernameType.yaml",
-      "sha256": "3281d68454af0dfa98bd5e217a467d1ef4a4e40150932fb2496dec0643add5f3"
-    },
-    {
       "file": "resolve-fqdn.yaml",
       "source_path": "ASIM/lib/functions/ASIM_ResolveFQDN.yaml",
       "sha256": "bf594fe8b3e6c2413a2999bc539e1c2a09dfc4369d130087bd824a38eb91130a"
     },
     {
-      "file": "resolve-src.yaml",
-      "source_path": "ASIM/lib/functions/ASIM_ResolveSrcFQDN.yaml",
-      "sha256": "c019837a7709b1f9275b54042bee9cefd86f55956ef0c3a97a5efcc5b4841f53"
+      "file": "resolve-dvc.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveDvcFQDN.yaml",
+      "sha256": "a1b5261477e4c18af205b82b73f61aa5e2c76ea2cada7c8bc41b41bca8bf27d9"
+    },
+    {
+      "file": "resolve-icmp-type.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveICMPType.yaml",
+      "sha256": "cecae7f45238af1d638722d8cb71acb770d21c26e035a507133e5fee2acdfcb6"
+    },
+    {
+      "file": "resolve-network-protocol.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveNetworkProtocol.yaml",
+      "sha256": "001630b52e8694e44e008d5e6638dbea99797b085dc94cb727a1e9dad5bcbf90"
+    },
+    {
+      "file": "source-setup.kql",
+      "source_path": "local:explicit-source-registration",
+      "sha256": "087bad785d7e552bfd9389cc3252a7b0313c33ba3b81aefd7dccc1be20b456c4"
     }
   ],
   "redistribution": "content",
   "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
-  "mutation_suite": "none"
+  "mutation_suite": "none",
+  "setup_file": "source-setup.kql"
 }
