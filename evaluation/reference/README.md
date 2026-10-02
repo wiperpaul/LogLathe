@@ -1,12 +1,15 @@
 # Mixed ASIM parser reference fixtures
 
-Status: functional fixtures; no new Jev quality measurement yet
+Status: pinned fixtures; new source-family Jev comparison completed
 Audience: evaluators and parser developers
 Canonical for: fixture selection, source-family split, and native coverage
-Last verified: 2026-10-01
+Last verified: 2026-10-02
 
 These small, attributed Microsoft sample exports and exact parsers are pinned to
-Azure-Sentinel `027a0f9338bfabcb27b784571b771c54572ebf01`. Each directory includes
+the Azure-Sentinel revisions declared in each manifest. The original fixtures use
+`027a0f9338bfabcb27b784571b771c54572ebf01`; the Carbon Black and Cisco ASA additions
+use `4fc25fd4c008337dfd6d9c5663be833e66575d53`. All use the existing catalogue pin
+`027a0f9338bfabcb27b784571b771c54572ebf01` and matching schema versions. Each directory includes
 resource hashes, the upstream MIT licence, and a checked native Kusto capture.
 They reuse the [reference workflow](../../docs/reference-pilot.md); normal tests
 verify captures offline without Docker, downloads, or a provider key.
@@ -52,9 +55,86 @@ out of prompt tuning; if they motivate changes, mark this version as inspected
 development evidence and choose a new test source. Source inspection to establish
 capture integrity is not blind independent semantic adjudication.
 
+## Additional event-text sources
+
+`expanded-split.json` is a separate version-3 source-family plan. The original
+version-2 plan and its reported trials remain unchanged. Version 3 assigns the
+already inspected Barracuda family to validation, keeps OpenSSH in development
+and Meraki in validation, and reserves **both Carbon Black Cloud and Cisco ASA
+for their first test**. The [new source-family assessment](../../docs/research/jev-expanded-assessment-2026-10-02.md)
+has now completed with definitions frozen: v1 agreed on 57/60 eligible templates,
+while all three v3 variants agreed on 59/60. Their predictions are now inspected;
+future tuning against them makes this development evidence. Inherit these
+partitions when making case-level splits; the fixture plan itself is not a
+case-level `schema-rank --split` input.
+
+| New source | Sample schema | Public inputs | Inputs with native output | Nonblank event text | Prepared clusters |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Carbon Black Cloud | Authentication | 16 | 16 | 16 | 5 |
+| Carbon Black Cloud | NetworkSession | 32 | 32 | 16 | 5 |
+| Carbon Black Cloud | AuditEvent | 66 | 66 | 66 | 34 |
+| Cisco ASA | Authentication | 217 | 217 | 217 | 15 |
+| Cisco ASA | NetworkSession | 30 | 27 | 30 | 4 |
+
+The additions supply 361 public rows and 345 nonblank messages. Across both
+fixture plans there are now 478 distinct public rows in five source families.
+Native output is **official-parser reference evidence**, not independent semantic
+gold. The assessment compares Jev with that reference, rather than claiming
+independent semantic accuracy. All new clusters remain unreviewed, and
+per-fixture cluster counts do not measure mixed-schema clustering quality.
+
+Carbon Black uses the original `description_s` for Authentication/AuditEvent and
+`event_description_s` for NetworkSession. These are vendor-provided narrative
+descriptions in ingested exports, not the complete raw records. The NetworkSession
+descriptions contain vendor markup, preserved as written. Its first 16 rows have
+no description: native capture covers all 32, while clustering consumes only rows
+17–32. Blank lines preserve the original source row identity. Do not manufacture
+messages from the structured columns or include those 16 missing-text rows in a
+text classifier's denominator. Report text coverage and representative-example
+coverage separately.
+
+Carbon Black's original `source.csv` remains byte-for-byte upstream content.
+`ingested-source.csv` is an explicit adapter that adds only an empty `_ItemId`
+system column; every original cell, including message text, is unchanged. The
+parser's `project-rename` requires a column rather than a scalar binding. To
+reproduce this adapter, read `source.csv` with `csv.DictReader` using UTF-8 with BOM
+handling, append `_ItemId` to its fieldnames, and write each unchanged row plus
+`{"_ItemId": ""}` using `csv.DictWriter`. Both inputs are hash-pinned, and offline
+tests check their exact cell relationship. `EventUid` stays empty. NetworkSession's
+setup supplies the optional `CarbonBlackNotifications_CL` table empty, using the
+parser's declared shape; this tests endpoint events without notification enrichment.
+Boolean `_b` columns retain their Boolean type, and timestamp exports allow absent
+fractional seconds when the manifest declares a fractional-seconds format.
+
+Cisco ASA uses the original `CommonSecurityLog.Message` strings, including ASA
+message IDs, rather than reconstructed CEF records. Its column types come from
+the pinned upstream `CommonSecurityLog_Schema.csv`; empty datetime cells are null.
+Its setup leaves the omitted `_ItemId` empty and supplies an empty NetworkAddresses
+watchlist for NetworkSession. Thus watchlist-based interface enrichment is not
+tested. The NetworkSession parser emits nothing for rows 4, 15 and 21: the exported
+`DeviceEventClassID` values (113004, 113005 and 611102) differ from the IDs embedded
+in their messages (710003, 106001 and 106007). These inputs are retained unchanged;
+they are **not_selected**, not Unsupported or implicitly NetworkSession-labelled.
+The other 27 rows provide native schema comparisons.
+
+The official sample inventory also contains CrowdStrike Falcon, SentinelOne and
+Illumio Core across all three schemas. They are deferred for this unstructured
+experiment: CrowdStrike's ingested `Message` cells are empty; SentinelOne mixes
+activity descriptions with structured alerts and threats; Illumio's exports are
+structured fields without a narrative message. Their existence alone does not
+make them suitable inputs for the current text clustering and review workflow.
+
+Official sources: [Carbon Black Authentication samples](https://github.com/Azure/Azure-Sentinel/blob/4fc25fd4c008337dfd6d9c5663be833e66575d53/Sample%20Data/ASIM/VMware_CarbonBlackCloud_ASimAuthentication_IngestedLogs.csv),
+[NetworkSession samples](https://github.com/Azure/Azure-Sentinel/blob/4fc25fd4c008337dfd6d9c5663be833e66575d53/Sample%20Data/ASIM/VMware_CarbonBlackCloud_ASimNetworkSession_IngestedLogs.csv),
+[AuditEvent samples](https://github.com/Azure/Azure-Sentinel/blob/4fc25fd4c008337dfd6d9c5663be833e66575d53/Sample%20Data/ASIM/VMwareCarbonBlackCloud_ASimAuditEvent_IngestedLogs.csv),
+[Cisco ASA Authentication samples](https://github.com/Azure/Azure-Sentinel/blob/4fc25fd4c008337dfd6d9c5663be833e66575d53/Sample%20Data/ASIM/Cisco_ASA_Authentication_IngestedLogs.csv),
+[NetworkSession samples](https://github.com/Azure/Azure-Sentinel/blob/4fc25fd4c008337dfd6d9c5663be833e66575d53/Sample%20Data/ASIM/Cisco_ASA_NetworkSession_IngestedLogs.csv).
+Matching parsers and helper paths are recorded in each fixture manifest.
+
 ## Ingestion and upstream limitations
 
-CSV bytes are unchanged. Format-2 manifests explicitly map export headers such as
+Upstream CSV bytes are unchanged; Carbon Black's additional adapter is described
+above. Format-2 manifests explicitly map export headers such as
 `TimeGenerated [UTC]` to their source-table names and declare source types. Meraki
 exports use three timestamp formats, recorded per fixture; Barracuda numeric `_d`
 columns are real.
@@ -104,7 +184,7 @@ across the sample-schema files.
 
 To independently execute a fixture, follow the existing local Kusto startup and
 `reference capture` instructions, writing a new capture under `artifacts/`. All
-six new checked captures used the same pinned engine image as OpenSSH. Preserve
+checked captures used the same pinned engine image as OpenSSH. Preserve
 the checked reference snapshot; compare newly captured outputs separately.
 The [Jev replay recipe](../../docs/jev-schema-experiment.md#preserve-and-replay-a-reported-trial)
 and existing release policy own any future trial archive. No additional publisher,

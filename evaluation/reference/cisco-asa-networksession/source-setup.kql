@@ -1,0 +1,2 @@
+let _ItemId = "";
+let _ASIM_GetWatchlistRaw = (watchlist: string) { datatable(WatchlistItem: dynamic)[] };

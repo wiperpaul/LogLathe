@@ -52,17 +52,30 @@ def source_events(path: Path, fixture: ReferenceFixture) -> list[ReferenceEvent]
                 if value is None:
                     raise ValueError(f"Missing CSV cell at row {number}: {name}")
                 if kind == "datetime":
-                    values[name] = (
-                        datetime.strptime(value, fixture.datetime_format)
-                        .replace(tzinfo=UTC)
-                        .isoformat()
-                    )
+                    if value:
+                        try:
+                            parsed = datetime.strptime(value, fixture.datetime_format)
+                        except ValueError:
+                            # Log Analytics exports can omit zero fractional seconds.
+                            if ".%f" not in fixture.datetime_format:
+                                raise
+                            parsed = datetime.strptime(
+                                value, fixture.datetime_format.replace(".%f", "")
+                            )
+                        values[name] = parsed.replace(tzinfo=UTC).isoformat()
+                    else:
+                        values[name] = None
                 elif kind in ("int", "long"):
                     values[name] = int(value) if value else None
                 elif kind == "real":
                     values[name] = float(value) if value else None
                     if values[name] is not None and not math.isfinite(values[name]):
                         raise ValueError(f"Non-finite source value at row {number}: {name}")
+                elif kind == "bool":
+                    normalized = value.strip().lower()
+                    if normalized not in ("", "true", "false"):
+                        raise ValueError(f"Invalid boolean source value at row {number}: {name}")
+                    values[name] = normalized == "true" if normalized else None
                 elif kind == "string":
                     values[name] = value
                 else:
@@ -207,6 +220,10 @@ def source_query(fixture: ReferenceFixture, event: ReferenceEvent, program: str)
             ):
                 raise ValueError(f"Expected finite real source value for {name}")
             cells.append(f"real({value})")
+        elif kind == "bool":
+            if type(value) is not bool:
+                raise ValueError(f"Expected boolean source value for {name}")
+            cells.append("true" if value else "false")
         else:
             raise ValueError(f"Unsupported fixture literal type: {kind}")
     return (

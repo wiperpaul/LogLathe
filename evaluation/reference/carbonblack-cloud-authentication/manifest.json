@@ -1,0 +1,86 @@
+{
+  "format_version": "2",
+  "fixture_id": "carbonblack-cloud-authentication-v1",
+  "track": "asim-parser-silver",
+  "group_id": "vmware-carbonblack-cloud",
+  "source_revision": "4fc25fd4c008337dfd6d9c5663be833e66575d53",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_name": "Authentication",
+  "schema_version": "0.1.3",
+  "source_table": "CarbonBlackAuditLogs_CL",
+  "message_field": "description_s",
+  "vendor": "VMware",
+  "product": "Carbon Black Cloud",
+  "csv_file": "ingested-source.csv",
+  "parser_file": "parser.yaml",
+  "helpers": [
+    "ASIM_GetUserType.yaml",
+    "ASIM_GetUsernameType.yaml"
+  ],
+  "columns": {
+    "TenantId": "string",
+    "SourceSystem": "string",
+    "MG": "string",
+    "ManagementGroupName": "string",
+    "TimeGenerated": "datetime",
+    "Computer": "string",
+    "RawData": "string",
+    "flagged_b": "bool",
+    "verbose_b": "bool",
+    "description_s": "string",
+    "requestUrl_s": "string",
+    "loginName_s": "string",
+    "eventId_g": "string",
+    "eventTime_d": "real",
+    "orgName_s": "string",
+    "clientIp_s": "string",
+    "Type": "string",
+    "_ResourceId": "string",
+    "_ItemId": "string"
+  },
+  "csv_column_names": {
+    "TimeGenerated": "TimeGenerated [UTC]"
+  },
+  "setup_file": "source-setup.kql",
+  "datetime_format": "%m/%d/%Y, %I:%M:%S.%f %p",
+  "resources": [
+    {
+      "file": "source.csv",
+      "source_path": "Sample Data/ASIM/VMware_CarbonBlackCloud_ASimAuthentication_IngestedLogs.csv",
+      "sha256": "a6d54f8174526ff5bcbcd4926837c8be1eba3acd9d3f3d68bbaab53f6c6f3633"
+    },
+    {
+      "file": "parser.yaml",
+      "source_path": "Parsers/ASimAuthentication/Parsers/ASimAuthenticationVMwareCarbonBlackCloud.yaml",
+      "sha256": "e71a7a0a4c7ad6f028c86b3b1a9e73b40525b06bae23d7ab2c7afaaf2089d0ae"
+    },
+    {
+      "file": "ASIM_GetUserType.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_GetUserType.yaml",
+      "sha256": "720f58d1bb01430519cea10b9154aeb0986b0c4fdbcad65c479ea55e4f8086f0"
+    },
+    {
+      "file": "ASIM_GetUsernameType.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_GetUsernameType.yaml",
+      "sha256": "3281d68454af0dfa98bd5e217a467d1ef4a4e40150932fb2496dec0643add5f3"
+    },
+    {
+      "file": "LICENSE.upstream",
+      "source_path": "LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    },
+    {
+      "file": "source-setup.kql",
+      "source_path": "local:explicit-source-table-setup",
+      "sha256": "70c43e1ecfdcfe229c4667accf908c05dc176e0853d877801b4d6125111ee5d7"
+    },
+    {
+      "file": "ingested-source.csv",
+      "source_path": "local:empty-loganalytics-item-id-column",
+      "sha256": "91d9291705f9f2e02989f6b0d2d80736f91b9b92764e58c8105336639b67747e"
+    }
+  ],
+  "redistribution": "content",
+  "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
+  "mutation_suite": "none"
+}
