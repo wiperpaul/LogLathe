@@ -18,6 +18,7 @@ from .jev import (
     SCHEMA_DEFINITIONS,
     SPEC_VERSION,
     UNSUPPORTED,
+    DecisionSpec,
     build_jev_request,
     request_hash,
 )
@@ -76,6 +77,7 @@ def run_schema_experiment(
     model: str = DEFAULT_MODEL,
     api_key: str = "",
     split_provenance: dict[str, str] | None = None,
+    spec_version: DecisionSpec = SPEC_VERSION,
 ) -> dict[str, Any]:
     if not inputs:
         raise EvaluationError("The schema experiment requires at least one input")
@@ -91,7 +93,10 @@ def run_schema_experiment(
         raise EvaluationError("Cache and output must use different directories")
 
     requests = [
-        build_jev_request(item.source, context=context, nouls=nouls, model=model) for item in inputs
+        build_jev_request(
+            item.source, context=context, nouls=nouls, model=model, spec_version=spec_version
+        )
+        for item in inputs
     ]
     rows: list[dict[str, Any]] = []
     baseline = SourceConceptSchemaRanker()
@@ -106,7 +111,9 @@ def run_schema_experiment(
         rows.append(
             {
                 "case_id": item.case_id,
-                "request_hash": request_hash(request, catalogue_revision),
+                "request_hash": request_hash(
+                    request, catalogue_revision, spec_version=spec_version
+                ),
                 "expected_schema": item.expected_schema,
                 "label_source": item.label_source,
                 "baseline": lexical.model_dump(mode="json"),
@@ -138,7 +145,12 @@ def run_schema_experiment(
             started = time.perf_counter()
             try:
                 response, hit = cached_response(
-                    request, catalogue_revision, cache, live=mode == "live", api_key=api_key
+                    request,
+                    catalogue_revision,
+                    cache,
+                    live=mode == "live",
+                    api_key=api_key,
+                    spec_version=spec_version,
                 )
                 choice = response.schema_choice
                 top = max(choice.probabilities.values())
@@ -170,7 +182,7 @@ def run_schema_experiment(
 
     report = {
         "format_version": "1",
-        "spec_version": SPEC_VERSION,
+        "spec_version": spec_version,
         "definition_sources": DEFINITION_SOURCES,
         "catalogue_revision": catalogue_revision,
         "model": model,

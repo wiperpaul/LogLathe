@@ -16,6 +16,8 @@ from asim_forge.schema_ranking import jev_client
 from asim_forge.schema_ranking.jev import (
     DEFAULT_MODEL,
     SCHEMA_DEFINITIONS,
+    SPEC_VERSION,
+    STRUCTURED_SPEC_VERSION,
     JevNoul,
     JevResponse,
     build_jev_request,
@@ -119,6 +121,89 @@ def test_cache_identity_includes_context_questions_model_and_catalogue(source):
     )
     with pytest.raises(ValueError):
         build_jev_request(source, model="jev-latest")
+
+
+def test_structured_questions_preserve_projection_and_use_matching_probe_definition(source):
+    old = build_jev_request(source)
+    new = build_jev_request(source, spec_version=STRUCTURED_SPEC_VERSION, nouls=True)
+    assert new.state == old.state
+    assert "gold-label" not in new.model_dump_json()
+    definition = new.questions["schema"].criteria["AuditEvent"]
+    assert isinstance(definition, dict)
+    assert set(definition) == {"covers", "not_for", "missing_context", "examples"}
+    probe = new.questions["primary_AuditEvent"].instructions
+    assert isinstance(probe, dict) and probe["definition"] == definition
+    assert "Meraki" not in json.dumps(new.model_dump()["questions"])
+    assert request_hash(old, REVISION) != request_hash(
+        new, REVISION, spec_version=STRUCTURED_SPEC_VERSION
+    )
+    # Specification provenance separates even an identical wire body.
+    assert request_hash(old, REVISION) != request_hash(
+        old, REVISION, spec_version=STRUCTURED_SPEC_VERSION
+    )
+
+
+def test_v1_frozen_example_hash_is_unchanged():
+    case = load_semantic_mapping_cases(Path("examples/evaluation/semantic-mapping-cases.jsonl"))[0]
+    assert request_hash(build_jev_request(case.input), case.catalogue_revision) == (
+        "0c83d27fb649fdc71c3e005cc9b59e044d4ecf3272324d0977b58263082cbb20"
+    )
+
+
+def test_structured_experiment_cache_and_cli_provenance(tmp_path, source, monkeypatch):
+    sender = Mock(return_value=JevResponse.model_validate(response_payload()))
+    monkeypatch.setattr(jev_client, "send_request", sender)
+    inputs = [SchemaExperimentInput(case_id="probe", source=source)]
+    cache = tmp_path / "cache"
+    live = run_schema_experiment(
+        inputs,
+        catalogue_revision=REVISION,
+        cache=cache,
+        spec_version=STRUCTURED_SPEC_VERSION,
+        output=tmp_path / "live",
+        mode="live",
+        api_key="test-key",
+    )
+    sender.reset_mock(side_effect=True)
+    sender.side_effect = AssertionError("network")
+    replay = run_schema_experiment(
+        inputs,
+        catalogue_revision=REVISION,
+        cache=cache,
+        spec_version=STRUCTURED_SPEC_VERSION,
+        output=tmp_path / "replay",
+        mode="replay",
+    )
+    assert live["spec_version"] == replay["spec_version"] == STRUCTURED_SPEC_VERSION
+    assert replay["cache_hits"] == 1
+    assert live["rows"][0]["jev"] == replay["rows"][0]["jev"]
+    sender.assert_not_called()
+    with pytest.raises(JevError, match="No cached"):
+        run_schema_experiment(
+            inputs,
+            catalogue_revision=REVISION,
+            cache=cache,
+            output=tmp_path / "wrong-spec",
+            mode="replay",
+            spec_version=SPEC_VERSION,
+        )
+    output = tmp_path / "cli"
+    main(
+        [
+            "evaluation",
+            "schema-rank",
+            "examples/evaluation/semantic-mapping-cases.jsonl",
+            "--catalog",
+            "evaluation/ci-catalog",
+            "--output",
+            str(output),
+            "--decision-spec",
+            STRUCTURED_SPEC_VERSION,
+        ]
+    )
+    assert (
+        json.loads((output / "report.json").read_text())["spec_version"] == STRUCTURED_SPEC_VERSION
+    )
 
 
 @pytest.mark.parametrize(

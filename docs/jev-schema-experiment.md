@@ -53,6 +53,14 @@ It asks about the event's primary action, rather than assigning NetworkSession
 because an event happens to contain an address or port. The definitions contain
 no vendor-specific demonstrations, SSH rules, field mappings, or gold examples.
 
+The opt-in `--decision-spec asim-boundaries-v2` uses structured coverage,
+exclusions, and generic constructed examples following Jev's documented guidance.
+It clarifies administrative resource operations and runtime-state boundaries;
+it is a development hypothesis, not a promoted default. See the
+[AuditEvent investigation](research/jev-audit-boundaries-2026-10-02.md).
+`asim-primary-event-v1` remains the default, and the specification is included in
+cache identity and report provenance so prior trials retain their exact requests.
+
 `--context template` sends just the template. The default, `enriched`, adds source
 vendor/product/table/message-column metadata when present, the first three event
 texts, and each parameter's first three values with a deterministic physical-type

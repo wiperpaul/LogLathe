@@ -15,7 +15,7 @@ from ..evaluation_splits import (
     validate_semantic_case_groups,
 )
 from ..reference.evidence import reference_review_evidence
-from ..schema_ranking.jev import DEFAULT_MODEL, SCHEMA_DEFINITIONS
+from ..schema_ranking.jev import DEFAULT_MODEL, SCHEMA_DEFINITIONS, SPEC_VERSION, SPEC_VERSIONS
 from ..schema_ranking.jev_experiment import (
     SchemaExperimentInput,
     from_labelled_case,
@@ -47,6 +47,12 @@ def register_schema_rank_parser(
     parser.add_argument("--context", choices=("template", "enriched"), default="enriched")
     parser.add_argument("--nouls", action="store_true", help="Add independent primary-event probes")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Pinned Jev model version")
+    parser.add_argument(
+        "--decision-spec",
+        choices=SPEC_VERSIONS,
+        default=SPEC_VERSION,
+        help="Versioned decision rubric; v1 remains the default",
+    )
     parser.add_argument("--limit", type=int, help="Use only the first N selected inputs")
     parser.add_argument("--split", type=Path, help="Existing grouped split manifest (cases only)")
     parser.add_argument(
@@ -131,6 +137,7 @@ def run_schema_rank_command(args: argparse.Namespace) -> None:
         model=args.model,
         api_key=os.environ.get("TYPESAFE_API_KEY", "") if args.live else "",
         split_provenance=split_provenance,
+        spec_version=args.decision_spec,
     )
     if reference is not None:
         selected_reference = {item.case_id: reference[item.case_id] for item in inputs}
