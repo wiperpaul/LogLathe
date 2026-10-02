@@ -140,3 +140,109 @@ synthetic diagnostics. The 52 possible new requests keep the model/input views
 fixed and avoid tuning on new Barracuda results. Meraki reference agreement and
 synthetic expected-label agreement must be reported separately. Neither supplies
 an independently adjudicated semantic improvement claim.
+
+## Measured outcome and decision
+
+The frozen development experiment completed all 52 new requests on 2026-10-02,
+using `jev-1.13.0`, with zero cache hits or failed requests. Implementation commit
+`cc09af306698c844fcadbb69ff7c1be8c2e3573b` preceded the live calls. No definitions
+were changed after seeing these outputs. The Meraki v1 comparison uses the
+previous frozen template-only run; it was not sent to the provider again.
+
+| Measure | v1 | Structured v2 |
+| --- | ---: | ---: |
+| Meraki template agreement with official parser | 13/32 (40.6%) | 11/32 (34.4%) |
+| Meraki represented-event agreement | 23/49 (46.9%) | 21/49 (42.9%) |
+| Meraki AuditEvent template agreement | 0/15 | 0/15 |
+| Meraki Authentication template agreement | 11/15 | 9/15 |
+| Meraki NetworkSession template agreement | 2/2 | 2/2 |
+| Synthetic expected-label agreement | 9/10 | 10/10 |
+| Synthetic AuditEvent positives | 4/5 | 5/5 |
+
+The sole corrected synthetic case was an automated managed-service start:
+`service-manager actor=svc-maint operation=StartService resource=backup-agent result=success`.
+v1 selected Unsupported (AuditEvent probability 0.41); v2 selected AuditEvent.
+The other nine constructed decisions stayed correct, including network and
+operational-health controls. This suggests useful recognition of an explicit
+resource operation, but five authored positives cannot establish general audit
+recognition, and the examples were not independently adjudicated.
+
+Only three Meraki selections changed:
+
+| Cluster | Source evidence | v1 -> v2 | Interpretation |
+| --- | --- | --- | --- |
+| `cluster-142f48b13b8dea4c` | Port status changes between down and 100fdx | NetworkSession -> Unsupported | Both disagree with the AuditEvent parser; operational status remains an ontology boundary |
+| `cluster-83aeae9ccf656780` | `type=8021x_deauth` without client IP | Authentication -> NetworkSession | Regression against the Authentication parser |
+| `cluster-cddb1395b0eb9843` | `type=8021x_deauth` with client IP | Authentication -> NetworkSession | Regression against the Authentication parser |
+
+The latter two were borderline in v1 and shifted toward NetworkSession in v2;
+v2 reported probabilities 0.55 and 0.49 for NetworkSession. A revised audit rubric
+can affect neighboring schema decisions. We have not isolated the cause between
+wording, structured representation, examples, or hosted-model variation. This
+single comparison cannot measure run-to-run stability or calibration.
+
+**Keep v1 as the default.** v2 is an opt-in research hypothesis, not a demonstrated
+overall improvement. Its audit clarification did not reconcile the Meraki
+reference, and its authentication regressions prevent promotion on these results.
+Do not widen AuditEvent to every operational state change merely to improve
+reference agreement, or discard disagreements to inflate the score.
+
+| New live batch | Requests | Input / output tokens | Median client round trip |
+| --- | ---: | ---: | ---: |
+| Meraki template-only v2 | 32 | 30,770 / 1,736 | 0.3463 s |
+| Synthetic template-only v1 | 10 | 6,030 / 540 | 0.3476 s |
+| Synthetic template-only v2 | 10 | 9,250 / 543 | 0.3479 s |
+
+Total new usage was 46,050 input and 2,819 output tokens. Latencies include client
+round trips and are descriptive of this run, not a throughput or cost benchmark.
+The richer rubric uses more input tokens; this narrow correction does not justify
+claiming an efficiency gain.
+
+## Reproduction and validation
+
+The full test suite and repository hooks passed. Tests cover structured request
+shapes, Choice/probe definition consistency, specification-aware request/cache
+identity, CLI/report provenance, and preservation of the existing v1 hash.
+The 84 previous Meraki/Barracuda outbound bodies and hashes remain identical.
+
+The existing one-off preservation recipe produced a local 125,984-byte archive:
+`artifacts/jev-audit-reproduction-2026-10-02.zip`, SHA-256
+`f36474c4d7b38afa64b8bf2303a46c3641b780aaf87d3f5e371b8390f5239f13`.
+Its 85 entries preserve the trial drivers, frozen inputs/build evidence, exact
+request bodies, parsed responses/cache entries, prior v1 comparison, and a file
+inventory tied to the implementation commit. The committed fixtures retain
+upstream licences. No publisher, new CI download, or live provider job was added.
+
+Clean-snapshot replay, with the key removed and socket access blocked, reproduced
+all 52 rows, exact request bodies, baseline/model outputs, synthetic metrics, and
+reference-agreement reports. That reproduces saved analysis; it does not promise
+identical predictions from another hosted-model call. See the archive's
+`REPRODUCTION.md` and `reproduction-manifest.json` for the locked-source recipe.
+The archive remains local for review, not a published research artifact.
+
+An exact-value credential scan checked 1,713 files, the working diff, and 326
+archive entries across the local trials, including raw, encoded, and escaped key
+forms. It found no matches; no key values or matched contents were printed.
+
+## What would resolve the remaining uncertainty
+
+Separate two objectives: compatibility with official parser assignments, and
+semantic agreement with ASIM guidance. Preserve both outcomes rather than choosing
+whichever label makes a model look better. We know the Meraki parser deliberately
+covers these operations; we do not know its creator's rationale, and general
+documentation does not settle every operational-state example.
+
+The next useful evaluation is a small blind human review through the existing
+schema-review workflow. Include VPN lifecycle, port/STP/VRRP state, explicit
+configuration/resource operations, and the deauthentication regressions. Record
+an intended schema or unresolved decision, a short reason, and the applicable
+schema version before showing model or parser labels. Unresolved cases remain
+unresolved; they are not converted to Unsupported.
+
+Add a source family with real administrative-operation records before changing
+the default: Meraki's disputed operational examples and our authored diagnostics
+are insufficient evidence of general audit recognition. Keep newly curated groups
+separate from inspected development cases using the existing split contracts.
+Any further wording revision should be frozen on development data and evaluated
+on new, independently reviewed cases. This is the point where a security
+engineer's judgment adds more value than another prompt tuned to these labels.

@@ -25,6 +25,12 @@ enriched Choice agreed on 9/10, compared with the lexical baseline's 3/10. All 2
 live requests replayed offline. This small public-source test is now inspected;
 its results should not be used to tune a system and claim untouched test quality.
 
+The [AuditEvent boundary experiment](research/jev-audit-boundaries-2026-10-02.md)
+tested an opt-in structured rubric with 52 new requests. Synthetic agreement rose
+from 9/10 to 10/10, but Meraki template agreement fell from 13/32 to 11/32 and
+AuditEvent agreement stayed at 0/15. The original rubric remains the default;
+semantic adjudication is needed before tuning toward the disputed parser labels.
+
 Jev is a plausible decision engine at the existing schema-ranking boundary:
 source template evidence goes in, a schema suggestion comes out. LogLathe owns
 the ASIM definitions. Jev does not replace the catalogue, field mapper, Potato
