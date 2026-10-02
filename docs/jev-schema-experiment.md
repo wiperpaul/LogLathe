@@ -3,7 +3,7 @@
 Status: experimental; initial live interoperability verified, general quality unestablished
 Audience: schema-ranking contributors and reviewers
 Canonical for: Jev request construction, execution, replay, and evaluation limits
-Last verified: 2026-09-30
+Last verified: 2026-10-02
 
 ## Decision and scope
 
@@ -11,6 +11,19 @@ The [first live OpenSSH assessment](research/jev-schema-assessment-2026-09-30.md
 completed 72 distinct requests and verified offline replay. It found useful
 semantic suggestions and unresolved diagnostic cases; the queue has no independent
 schema labels, so these observations are not an accuracy benchmark.
+
+The [Meraki validation assessment](research/jev-meraki-assessment-2026-10-02.md)
+completed 64 live requests and verified offline replay. Both Choice input views
+agreed with native references on 13/32 templates; neither selected AuditEvent.
+Enrichment did not improve agreement, and a constant schema prediction exceeded
+Jev's template score. The assessment records the schema-boundary review needed
+before changing definitions or examining Barracuda test predictions.
+
+The subsequent [Barracuda test assessment](research/jev-barracuda-assessment-2026-10-02.md)
+used those definitions unchanged. Template-only Choice agreed on 10/10 templates;
+enriched Choice agreed on 9/10, compared with the lexical baseline's 3/10. All 20
+live requests replayed offline. This small public-source test is now inspected;
+its results should not be used to tune a system and claim untouched test quality.
 
 Jev is a plausible decision engine at the existing schema-ranking boundary:
 source template evidence goes in, a schema suggestion comes out. LogLathe owns

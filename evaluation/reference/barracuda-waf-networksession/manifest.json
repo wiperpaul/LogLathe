@@ -1,0 +1,84 @@
+{
+  "format_version": "2",
+  "fixture_id": "barracuda-waf-networksession-v1",
+  "track": "asim-parser-silver",
+  "group_id": "barracuda-waf",
+  "source_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_name": "NetworkSession",
+  "schema_version": "0.2.6",
+  "source_table": "barracuda_CL",
+  "message_field": "Message",
+  "vendor": "Barracuda",
+  "product": "WAF",
+  "csv_file": "source.csv",
+  "parser_file": "parser.yaml",
+  "helpers": [],
+  "columns": {
+    "TenantId": "string",
+    "SourceSystem": "string",
+    "MG": "string",
+    "ManagementGroupName": "string",
+    "TimeGenerated": "datetime",
+    "Computer": "string",
+    "RawData": "string",
+    "SourceIP": "string",
+    "SourcePort_d": "real",
+    "DestinationIP_s": "string",
+    "DestinationPort_d": "real",
+    "ActionID_s": "string",
+    "Protocol_s": "string",
+    "Details_s": "string",
+    "duser_s": "string",
+    "changeType_s": "string",
+    "host_s": "string",
+    "ident_s": "string",
+    "Message": "string",
+    "cef_version_d": "real",
+    "Vendor_s": "string",
+    "Product_s": "string",
+    "DeviceVersion_s": "string",
+    "SignatureId_s": "string",
+    "EventName_s": "string",
+    "Severity_s": "string",
+    "LogType_s": "string",
+    "DeviceReceiptTime_s": "string",
+    "EventMessage_s": "string",
+    "UnitName_s": "string",
+    "EventID_d": "real",
+    "HostIP_s": "string",
+    "WAF_Serial_s": "string",
+    "Type": "string",
+    "_ResourceId": "string"
+  },
+  "csv_column_names": {
+    "TimeGenerated": "TimeGenerated [UTC]"
+  },
+  "datetime_format": "%m/%d/%Y, %I:%M:%S %p",
+  "resources": [
+    {
+      "file": "source.csv",
+      "source_path": "Sample Data/ASIM/Barracuda_WAF_ASimNetworkSession_IngestedLogs.csv",
+      "sha256": "88f90e1b32e8e2a8068f2c66c30a80e6d297001ec1352b6cb50dc03d6bc261dd"
+    },
+    {
+      "file": "parser.yaml",
+      "source_path": "Parsers/ASimNetworkSession/Parsers/ASimNetworkSessionBarracudaWAF.yaml",
+      "sha256": "65f92f1bd8a6df15c591a4a3e1aec85a438d59238673a2f81637e7855e8bca45"
+    },
+    {
+      "file": "LICENSE.upstream",
+      "source_path": "LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    },
+    {
+      "file": "source-setup.kql",
+      "source_path": "local:explicit-source-table-setup",
+      "sha256": "a76e9bc55540f90e544eb779f159d18f0e2994ba8217e17afeed67f89539ff0f"
+    }
+  ],
+  "redistribution": "content",
+  "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
+  "mutation_suite": "none",
+  "setup_file": "source-setup.kql"
+}

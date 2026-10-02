@@ -1,0 +1,81 @@
+{
+  "format_version": "2",
+  "fixture_id": "barracuda-waf-auditevent-v1",
+  "track": "asim-parser-silver",
+  "group_id": "barracuda-waf",
+  "source_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_name": "AuditEvent",
+  "schema_version": "0.1",
+  "source_table": "barracuda_CL",
+  "message_field": "Message",
+  "vendor": "Barracuda",
+  "product": "WAF",
+  "csv_file": "source.csv",
+  "parser_file": "parser.yaml",
+  "helpers": [],
+  "columns": {
+    "TenantId": "string",
+    "SourceSystem": "string",
+    "MG": "string",
+    "ManagementGroupName": "string",
+    "TimeGenerated": "datetime",
+    "Computer": "string",
+    "RawData": "string",
+    "ObjectName_s": "string",
+    "ObjectType_s": "string",
+    "AdminName_s": "string",
+    "ClientType_s": "string",
+    "CommandName_s": "string",
+    "LoginIP_s": "string",
+    "LoginPort_d": "real",
+    "ChangeType_s": "string",
+    "TransactionID_d": "real",
+    "NewValue_s": "string",
+    "OldValue_s": "string",
+    "Variable_s": "string",
+    "AdminRole_s": "string",
+    "host_s": "string",
+    "ident_s": "string",
+    "Message": "string",
+    "cef_version_d": "real",
+    "Vendor_s": "string",
+    "Product_s": "string",
+    "DeviceVersion_s": "string",
+    "SignatureId_s": "string",
+    "EventName_s": "string",
+    "Severity_s": "string",
+    "LogType_s": "string",
+    "DeviceReceiptTime_s": "string",
+    "EventMessage_s": "string",
+    "UnitName_s": "string",
+    "HostIP_s": "string",
+    "WAF_Serial_s": "string",
+    "Type": "string",
+    "_ResourceId": "string"
+  },
+  "csv_column_names": {
+    "TimeGenerated": "TimeGenerated [UTC]"
+  },
+  "datetime_format": "%m/%d/%Y, %I:%M:%S %p",
+  "resources": [
+    {
+      "file": "source.csv",
+      "source_path": "Sample Data/ASIM/Barracuda_WAF_ASimAuditEvent_IngestedLogs.csv.csv",
+      "sha256": "ef38d522bc46e85009ecf37c127715810c0793eae88c5ed944f1c3cc9bf75942"
+    },
+    {
+      "file": "parser.yaml",
+      "source_path": "Parsers/ASimAuditEvent/Parsers/ASimAuditEventBarracudaWAF.yaml",
+      "sha256": "0a1cb9c38ee2dbfe9c1b1a01fd144b1e6aa3de5efb2cee1e622d98b9d4dbcc61"
+    },
+    {
+      "file": "LICENSE.upstream",
+      "source_path": "LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    }
+  ],
+  "redistribution": "content",
+  "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
+  "mutation_suite": "none"
+}

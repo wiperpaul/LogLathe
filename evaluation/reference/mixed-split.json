@@ -1,0 +1,46 @@
+{
+  "format_version": "1",
+  "split_id": "mixed-asim-reference-v2",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "group_strategy": "source-family",
+  "reference_partitions": [
+    "train"
+  ],
+  "entries": [
+    {
+      "case_id": "barracuda-waf-auditevent-v1",
+      "group_id": "barracuda-waf",
+      "partition": "test"
+    },
+    {
+      "case_id": "barracuda-waf-authentication-v1",
+      "group_id": "barracuda-waf",
+      "partition": "test"
+    },
+    {
+      "case_id": "barracuda-waf-networksession-v1",
+      "group_id": "barracuda-waf",
+      "partition": "test"
+    },
+    {
+      "case_id": "cisco-meraki-auditevent-v1",
+      "group_id": "cisco-meraki",
+      "partition": "validation"
+    },
+    {
+      "case_id": "cisco-meraki-authentication-v1",
+      "group_id": "cisco-meraki",
+      "partition": "validation"
+    },
+    {
+      "case_id": "cisco-meraki-networksession-v1",
+      "group_id": "cisco-meraki",
+      "partition": "validation"
+    },
+    {
+      "case_id": "openssh-authentication-v1",
+      "group_id": "openbsd-openssh",
+      "partition": "train"
+    }
+  ]
+}

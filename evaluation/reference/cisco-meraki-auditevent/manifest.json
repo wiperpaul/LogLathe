@@ -1,0 +1,66 @@
+{
+  "format_version": "2",
+  "fixture_id": "cisco-meraki-auditevent-v1",
+  "track": "asim-parser-silver",
+  "group_id": "cisco-meraki",
+  "source_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_name": "AuditEvent",
+  "schema_version": "0.1",
+  "source_table": "meraki_CL",
+  "message_field": "Message",
+  "vendor": "Cisco",
+  "product": "Meraki",
+  "csv_file": "source.csv",
+  "parser_file": "parser.yaml",
+  "helpers": [
+    "resolve-fqdn.yaml",
+    "resolve-dvc.yaml"
+  ],
+  "columns": {
+    "TenantId": "string",
+    "SourceSystem": "string",
+    "MG": "string",
+    "ManagementGroupName": "string",
+    "TimeGenerated": "datetime",
+    "Computer": "string",
+    "RawData": "string",
+    "Message": "string",
+    "Type": "string",
+    "_ResourceId": "string"
+  },
+  "csv_column_names": {
+    "TimeGenerated": "TimeGenerated [UTC]"
+  },
+  "datetime_format": "%m/%d/%Y, %I:%M:%S.%f %p",
+  "resources": [
+    {
+      "file": "source.csv",
+      "source_path": "Sample Data/ASIM/Cisco_Meraki_ASimAuditEvent_IngestedLogs.csv",
+      "sha256": "319793afdc25e6884e03c468ff8e8231fb1f04c4fbb0b808eab1fc191e656267"
+    },
+    {
+      "file": "parser.yaml",
+      "source_path": "Parsers/ASimAuditEvent/Parsers/ASimAuditEventCiscoMeraki.yaml",
+      "sha256": "d708665db9d9822e2d325fc7361edfbb9fb804d9922f566897aa76d5afb3db08"
+    },
+    {
+      "file": "LICENSE.upstream",
+      "source_path": "LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    },
+    {
+      "file": "resolve-fqdn.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveFQDN.yaml",
+      "sha256": "bf594fe8b3e6c2413a2999bc539e1c2a09dfc4369d130087bd824a38eb91130a"
+    },
+    {
+      "file": "resolve-dvc.yaml",
+      "source_path": "ASIM/lib/functions/ASIM_ResolveDvcFQDN.yaml",
+      "sha256": "a1b5261477e4c18af205b82b73f61aa5e2c76ea2cada7c8bc41b41bca8bf27d9"
+    }
+  ],
+  "redistribution": "content",
+  "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
+  "mutation_suite": "none"
+}

@@ -1,0 +1,4 @@
+// Local source registration for this fixture; not a test of Sentinel watchlists.
+let _ASIM_GetSourceBySourceType = (sourceType:string) {
+  iff(sourceType == "CiscoMeraki", dynamic(["CiscoMeraki"]), dynamic([]))
+};
