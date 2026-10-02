@@ -3,6 +3,13 @@
 Status: live development assessment; clearer definitions helped, staging added no top-choice gain
 Last verified: 2026-10-02
 
+The subsequent [new-source test](jev-expanded-assessment-2026-10-02.md) held these
+definitions fixed on Carbon Black Cloud and Cisco ASA. V3 Choice improved reference
+agreement from 57/60 to 59/60 eligible templates; parallel questions and staging
+again added no top-choice gain. That report records the remaining SSH disconnection
+case, exclusions, and clean-checkout replay. The Meraki results below remain the
+original development assessment.
+
 ## Live finding
 
 The clarified v3 Choice corrected all four known Meraki Authentication errors

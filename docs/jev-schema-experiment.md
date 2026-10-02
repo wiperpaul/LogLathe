@@ -31,6 +31,15 @@ from 9/10 to 10/10, but Meraki template agreement fell from 13/32 to 11/32 and
 AuditEvent agreement stayed at 0/15. The original rubric remains the default;
 semantic adjudication is needed before tuning toward the disputed parser labels.
 
+The [Carbon Black Cloud / Cisco ASA test](research/jev-expanded-assessment-2026-10-02.md)
+used new source families with frozen v1/v3 definitions and completed 252 distinct
+live requests. V3 Choice agreed on 59/60 eligible templates, compared with 57/60
+for v1 and 39/60 for the lexical baseline. All variants recognized the 34 Carbon
+Black audit templates. Probes and staging gave the same top choices as v3 Choice,
+and one SSH internal-error disconnection remained a reference disagreement.
+Clean-checkout offline replay passed. The defaults remain unchanged; these are
+public, unreviewed clusters with parser references, not independently labelled gold.
+
 Jev is a plausible decision engine at the existing schema-ranking boundary:
 source template evidence goes in, a schema suggestion comes out. LogLathe owns
 the ASIM definitions. Jev does not replace the catalogue, field mapper, Potato

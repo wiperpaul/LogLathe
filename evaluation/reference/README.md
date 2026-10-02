@@ -1,6 +1,6 @@
 # Mixed ASIM parser reference fixtures
 
-Status: functional fixtures; no new Jev quality measurement yet
+Status: pinned fixtures; new source-family Jev comparison completed
 Audience: evaluators and parser developers
 Canonical for: fixture selection, source-family split, and native coverage
 Last verified: 2026-10-02
@@ -61,7 +61,10 @@ capture integrity is not blind independent semantic adjudication.
 version-2 plan and its reported trials remain unchanged. Version 3 assigns the
 already inspected Barracuda family to validation, keeps OpenSSH in development
 and Meraki in validation, and reserves **both Carbon Black Cloud and Cisco ASA
-for test**. No live Jev requests have been made for these additions. Inherit these
+for their first test**. The [new source-family assessment](../../docs/research/jev-expanded-assessment-2026-10-02.md)
+has now completed with definitions frozen: v1 agreed on 57/60 eligible templates,
+while all three v3 variants agreed on 59/60. Their predictions are now inspected;
+future tuning against them makes this development evidence. Inherit these
 partitions when making case-level splits; the fixture plan itself is not a
 case-level `schema-rank --split` input.
 
@@ -76,7 +79,8 @@ case-level `schema-rank --split` input.
 The additions supply 361 public rows and 345 nonblank messages. Across both
 fixture plans there are now 478 distinct public rows in five source families.
 Native output is **official-parser reference evidence**, not independent semantic
-gold or a measurement of Jev quality. All new clusters remain unreviewed, and
+gold. The assessment compares Jev with that reference, rather than claiming
+independent semantic accuracy. All new clusters remain unreviewed, and
 per-fixture cluster counts do not measure mixed-schema clustering quality.
 
 Carbon Black uses the original `description_s` for Authentication/AuditEvent and
