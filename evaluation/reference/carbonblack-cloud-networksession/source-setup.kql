@@ -1,0 +1,18 @@
+let _ItemId = "";
+let CarbonBlackNotifications_CL = datatable (
+      type_s: string,
+      threatInfo_incidentId_g: string,
+      threatInfo_score_d: real,
+      threatInfo_summary_s: string,
+      threatInfo_time_d: real,
+      threatInfo_threatCause_threatCategory_s: string,
+      threatInfo_threatCause_causeEventId_g: string,
+      ruleName_s: string,
+      deviceInfo_deviceVersion_s: string,
+      threatInfo_threatCause_originSourceType_s: string,
+      threatInfo_threatCause_reputation_s: string,
+      threatInfo_threatCause_reason_s: string,
+      id_g: string,
+      primary_event_id_g: string,
+      threat_id_g: string
+  )[];
