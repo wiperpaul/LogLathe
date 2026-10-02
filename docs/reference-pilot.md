@@ -1,24 +1,26 @@
-# ASIM reference pilot
+# ASIM reference workflow
 
 Status: current
-Audience: the first reviewer and parser developers
-Canonical for: public reference fixtures and native parser execution
-Last verified: 2026-09-11
+Audience: mapping reviewers and parser developers
+Canonical for: the worked OpenSSH review and native parser execution workflow
+Last verified: 2026-10-03
 
-The first pilot uses 20 public OpenSSH source-table rows and ten explicit controlled
-variants. The upstream parser and its three helpers are pinned to Azure-Sentinel
+The worked example uses 20 public OpenSSH source-table rows and ten explicit
+controlled variants. The upstream parser and its three helpers are pinned to Azure-Sentinel
 commit `027a0f9338bfabcb27b784571b771c54572ebf01`. Checked native Kusto output is
 available in [the fixture directory](../evaluation/reference/openssh).
 
-The [mixed fixture inventory](../evaluation/reference/README.md) adds Cisco Meraki
-and Barracuda WAF samples, a source-family partition plan, and checked captures.
+The [mixed fixture inventory](../evaluation/reference/README.md) also covers Cisco
+Meraki, Barracuda WAF, Carbon Black Cloud, and Cisco ASA, with source-family
+partitions and checked captures.
 It records native selection gaps explicitly; sample filenames are not labels.
 
 This is `asim-parser-silver`: functional regression evidence against a particular
 implementation. It is separate from the corpus benchmark and from semantic gold.
 Public examples, generated variants, and independently reviewed labels remain
-distinct. All events and variants belong to the same `openbsd-openssh` source
-family; this fixture cannot establish cross-vendor generalization.
+distinct. All events and variants in this worked example belong to the same
+`openbsd-openssh` source family; this fixture cannot establish cross-vendor
+generalization.
 
 ## Your first session
 
@@ -32,7 +34,7 @@ uv run asim-forge reference prepare evaluation/reference/openssh --output artifa
 Start the same Potato interface used in the [operator workflow](operator-workflow.md):
 
 ```console
-uv sync --extra review
+uv sync --locked --extra review
 uv run potato start artifacts/reference-pilot/openssh/build/potato/config.yaml -p 8000
 ```
 
@@ -40,7 +42,10 @@ Visit `http://localhost:8000` and enter your reviewer name. The task shows sourc
 templates, representative messages, and extracted slot values. Mapping suggestions
 and normalized reference outputs stay outside the cluster review.
 
-Start with five to ten clusters and choose an outcome for each:
+Prioritize suspicious examples: malformed or truncated messages, multiline records
+split into separate events, mixed layouts, and captures that lose important values.
+Routine approval of already coherent clusters provides little corrective evidence.
+For each inspected cluster, choose an outcome:
 
 - **Approve:** the examples form one coherent event pattern.
 - **Needs a split:** the cluster mixes distinct meanings or layouts.
@@ -57,11 +62,12 @@ Potato stores decisions in
 reader accepts that file directly; partial reviews are supported. Approved clusters
 still await mapping.
 
-After review, use the existing annotation queue with the pinned catalogue described
-below:
+After review, use the existing annotation queue with the committed
+[catalogue snapshot](../evaluation/ci-catalog/README.md). It matches this fixture's
+pinned Azure-Sentinel revision and requires no catalogue download:
 
 ```console
-uv run asim-forge evaluation queue artifacts/reference-pilot/openssh/build artifacts/reference-pilot/openssh/build/potato/annotation_output/<reviewer>/user_state.json --catalog artifacts/asim-catalog --group-id openbsd-openssh --group-strategy source-family --vendor OpenBSD --product OpenSSH --source-table Syslog --message-field SyslogMessage --output artifacts/reference-pilot/openssh/annotation
+uv run asim-forge evaluation queue artifacts/reference-pilot/openssh/build artifacts/reference-pilot/openssh/build/potato/annotation_output/<reviewer>/user_state.json --catalog evaluation/ci-catalog --group-id openbsd-openssh --group-strategy source-family --vendor OpenBSD --product OpenSSH --source-table Syslog --message-field SyslogMessage --output artifacts/reference-pilot/openssh/annotation
 ```
 
 The queue preserves the approved source evidence. Its tasks remain blinded to
@@ -75,7 +81,7 @@ native output and the prepared public fixture to make the before/after values
 available beside the mapping controls:
 
 ```console
-uv run asim-forge review prepare artifacts/reference-pilot/openssh/annotation --catalog artifacts/asim-catalog --setup examples/review-setup/openssh.json --cluster-reviews artifacts/reference-pilot/openssh/build/potato/annotation_output/<reviewer>/user_state.json --reference-fixture evaluation/reference/openssh --reference-bundle artifacts/reference-pilot/openssh --reference-capture evaluation/reference/openssh/reference-output.json --output artifacts/reference-pilot/openssh/mapping
+uv run asim-forge review prepare artifacts/reference-pilot/openssh/annotation --catalog evaluation/ci-catalog --setup examples/review-setup/openssh.json --cluster-reviews artifacts/reference-pilot/openssh/build/potato/annotation_output/<reviewer>/user_state.json --reference-fixture evaluation/reference/openssh --reference-bundle artifacts/reference-pilot/openssh --reference-capture evaluation/reference/openssh/reference-output.json --output artifacts/reference-pilot/openssh/mapping
 uv run potato start artifacts/reference-pilot/openssh/mapping/potato/config.yaml -p 8000
 ```
 
@@ -109,7 +115,7 @@ does not supply independent evaluation labels or certify parser correctness.
 
 ## Integration boundaries
 
-| Responsibility | Existing owner or new capability |
+| Responsibility | Owner |
 | --- | --- |
 | Log ingestion, DeepParse clustering, schema ranking, Potato task creation | Existing `build_review_bundle` |
 | Cluster decisions | Existing Potato task and `load_review_decisions` |
@@ -117,7 +123,7 @@ does not supply independent evaluation labels or certify parser correctness.
 | Semantic annotation, provenance, promotion, grouped splits | Existing `evaluation queue`, `promote`, and `validate` |
 | Mapping approaches, metrics, and semantic perturbations | Existing `evaluation compare`, controlled track, and corpus benchmarks |
 | Candidate generation | Existing `compile` with a complete approved mapping |
-| Typed public source-table fixtures, native Kusto captures, output comparison | New `reference prepare`, `capture`, and `compare` |
+| Typed public source-table fixtures, native Kusto captures, output comparison | `reference prepare`, `capture`, and `compare` |
 
 The fixture's ten input-row probes exercise native parser behavior. The existing
 controlled track transforms labelled semantic cases and remains responsible for
@@ -196,11 +202,10 @@ docker stop loglathe-reference-kusto
 
 ## Offline output comparison
 
-Sync the catalogue revision from the fixture, then compare complete native captures:
+Compare complete native captures using the committed catalogue for this fixture:
 
 ```console
-uv run asim-forge catalog sync --output artifacts/asim-catalog --revision 027a0f9338bfabcb27b784571b771c54572ebf01
-uv run asim-forge reference compare evaluation/reference/openssh artifacts/reference-pilot/openssh --reference evaluation/reference/openssh/reference-output.json --candidate path/to/candidate.kql --candidate-capture path/to/candidate-output.json --catalog artifacts/asim-catalog --output artifacts/reference-pilot/openssh/comparison.json
+uv run asim-forge reference compare evaluation/reference/openssh artifacts/reference-pilot/openssh --reference evaluation/reference/openssh/reference-output.json --candidate path/to/candidate.kql --candidate-capture path/to/candidate-output.json --catalog evaluation/ci-catalog --output artifacts/reference-pilot/openssh/comparison.json
 ```
 
 Comparison verifies the exact input, reference program, candidate program, and
@@ -209,6 +214,10 @@ row counts, column types, missing/extra output fields, and values. Source-table
 pass-through columns are ignored unless the pinned catalogue defines them as target
 fields. Target columns are still compared when both parsers select zero rows, so
 event-selection agreement and exact-output agreement are reported separately.
+
+For a fixture pinned to another catalogue revision, use its declared revision;
+the [catalogue sync guide](operator-workflow.md#sync-the-asim-catalogue) describes
+fetching a different snapshot explicitly.
 
 Catalogue checks cover mandatory columns/values, physical types, enumerations,
 and IP addresses. They run on **both** outputs and retain upstream failures.

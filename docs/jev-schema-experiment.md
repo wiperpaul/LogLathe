@@ -1,9 +1,9 @@
 # Jev schema-ranking experiment
 
-Status: experimental; initial live interoperability verified, general quality unestablished
+Status: experimental; frozen source-family comparisons and offline replay completed, independent semantic quality unestablished
 Audience: schema-ranking contributors and reviewers
 Canonical for: Jev request construction, execution, replay, and evaluation limits
-Last verified: 2026-10-02
+Last verified: 2026-10-03
 
 ## Decision and scope
 

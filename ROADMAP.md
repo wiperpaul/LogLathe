@@ -3,7 +3,7 @@
 Status: active
 Current milestone: 2 — continuous assisted ASIM review
 Canonical for: remaining and deliberately deferred work
-Last reviewed: 2026-09-11
+Last reviewed: 2026-10-03
 
 This roadmap describes what remains to be built. Current behavior and durable
 invariants are documented in [architecture](docs/architecture.md); completed
@@ -41,38 +41,55 @@ independent schema ranking, provider-neutral mapping contracts, blinded annotati
 and promotion, controlled robustness, several transparent approaches and priors,
 group-aware statistics, and evidence-separated benchmark reports.
 
+The core assisted mapping path is also implemented: Potato presents Cluster /
+Schema / Mappings tabs, schema-specific target dropdowns and required rows,
+span-based slot/constant selection, separate schema drafts, and explicit mapping
+approvals. Source context and supplied fields come from frozen configuration;
+editable defaults support template exceptions. An approved, complete mapping
+compiles through the existing parser-specification and KQL path.
+
+Native reference coverage now spans the five source families in the
+[fixture inventory](evaluation/reference/README.md). Jev schema trials have fixed
+definitions, offline previews, request-addressed caches, and replay verification.
+These remain advisory experiments alongside deterministic review and compilation.
+
 ## Milestone 2 — Continuous assisted ASIM review
 
 Goal: after cluster approval, carry an eligible reviewer directly into an editable,
 prefilled ASIM suggestion without losing context or weakening the Stage 1 decision.
 
-### Immediate checkpoint — first reference pilot
+### Immediate checkpoint — resolve review findings
 
-The [OpenSSH reference pilot](docs/reference-pilot.md) now provides pinned public
-inputs, ten controlled variants, native Kusto reference capture/replay, value and
-row comparisons, and bounded catalogue checks. Public samples pass through the
-existing build, Potato review, annotation queue, and reviewed compilation workflow.
+Use the [reference workflow](docs/reference-pilot.md) for the existing build,
+Potato review, annotation queue, reviewed compilation, and native comparison loop.
+The first local OpenSSH cluster review is complete; the newer mixed-source trial
+clusters remain unreviewed.
 
-The source-cluster review is complete for the first local pilot. Assisted mapping
-review now runs in Potato with editable suggestions, the original notes, and
-optional native before/after evidence. Explicit approvals feed the existing
-compiler; drafts, deferrals, and extraction gaps remain uncompiled. The mapping
-item now has Cluster / Schema / Mappings tabs, prefilled required targets, a compact
-mapping list, and one active editor. Schema changes preserve separate drafts.
-Revised split/reject/more-evidence cluster decisions block compilation
-while retaining edits. The original cluster-review snapshot remains preserved.
+Prioritize a security engineer's review of concrete schema/mapping disagreements
+and extraction gaps. The [latest Jev assessment](docs/research/jev-expanded-assessment-2026-10-02.md)
+leaves one Cisco ASA SSH internal-error disconnection classified as NetworkSession
+against the parser's Authentication/Logoff reference. Its Success result is also
+a useful mapping question. Record an independent interpretation and rationale
+before changing definitions or treating the parser as a semantic answer key.
 
-The next checkpoint is a security engineer's review of one or two useful mapping
-disagreements or extraction gaps. Turn those findings into regression fixtures and
-compare a reviewed candidate against native reference output. Expand to two
-additional source families after that first loop. Automatic transition between
-the initial cluster and mapping tasks, arbitrary text-span correction linked to
-extraction, specialist assignment, and inline parser validation remain outstanding.
+Turn accepted corrections into small development regression cases, and compare a
+reviewed candidate against native output. Continue cluster review where examples
+suggest malformed records, bad boundaries or mixed meanings. All current Jev
+source-family predictions are now inspected; reserve any additional test family
+before using those outcomes to tune definitions.
+
+The current manual review loop is usable. Automatic transition from the initial
+cluster task, arbitrary text-span extraction repair, specialist assignment, and
+inline parser validation remain outstanding. Keep further work tied to observed
+review problems and reuse the existing workflow and preservation tooling.
 
 ### Source onboarding and preparation
 
-- Introduce a source-onboarding record for vendor, product, source table, message
-  field, format, and collection context.
+- Consolidate the existing queue source metadata and review setup into a reusable
+  source-onboarding profile, adding format and collection context where useful.
+  Vendor, product, source table and message field are already frozen and read-only
+  during mapping review; schema versions, timestamp policy and default/supplied
+  mappings are already configured before task preparation.
 - Extend the current required-field guidance to recommended fields and richer
   source-context coverage. Suggestions and catalogue snapshots are already frozen
   separately from editable Potato decisions.
@@ -97,20 +114,22 @@ reducing repetitive review of similar, apparently coherent patterns.
    specialist.
 6. Save the mapping decision separately, then offer parser preview and validation.
 
-Reject, split, and insufficient-evidence decisions do not open mapping review.
-Changing an approved cluster invalidates dependent suggestions and mappings rather
-than silently reusing stale work.
+Initial reject, split, and insufficient-evidence decisions do not enter the approved
+queue. The mapping task can revisit an approved cluster's decision, retaining edits
+while blocking approval and compilation. Rebuilding or splitting source evidence
+requires a new queue and review revision; previous approvals cannot be reused.
 
 ### Lifecycle and API work
 
-- Split the combined review record into `ClusterDecision`, `SourceMetadata`,
-  `AsimSuggestion`, and `AsimMappingDecision` records.
-- Link records with stable source and cluster IDs plus explicit revisions.
-- Add lifecycle states such as `awaiting_cluster_review`, `awaiting_mapping`,
-  `mapping_in_progress`, `awaiting_validation`, and `invalidated`.
-- Retain canonical JSONL export while the UI edits typed fields.
-- Record resumed work against the exact evidence and suggestion revision originally
-  shown.
+Frozen source tasks, suggestions, setup and editable drafts already have separate
+records and provenance checks. Remaining lifecycle work should extend those
+contracts when needed:
+
+- Connect preparation and task transitions without losing the original approval
+  records or requiring repeated evidence review.
+- Add explicit ownership, specialist assignment, and validation-stage state.
+- Make rebuilding, requeueing and dependent-work invalidation easier to inspect.
+- Preserve canonical exports, stable IDs and exact evidence revisions on resume.
 
 ### Evaluation needed before provider selection
 
@@ -121,9 +140,10 @@ than silently reusing stale work.
 - Measure median active review time, acceptance/edit rates, deferral, and
   invalidation—not only offline mapping scores.
 
-Exit criteria: an approved cluster can proceed through an attributable, editable
-mapping review without raw JSON editing or repeated evidence reading, while cluster
-and mapping approvals remain independently auditable.
+Exit criteria: cluster approval opens a prepared, attributable mapping task without
+manual queue/task commands or repeated evidence reading. Reviewers can edit,
+defer or route work while cluster and mapping approvals remain independently
+auditable. The existing manually prepared mapping task supplies the core controls.
 
 ## Milestone 3 — Schema-aware validation and parser refinement
 
@@ -141,10 +161,12 @@ Goal: turn an approved mapping into a parser candidate with actionable checks.
 Exit criteria: every candidate reports target coverage, test evidence, warnings,
 and the exact input, catalogue, mapping, and generator revisions used.
 
-Current partial implementation: the reference pilot executes KQL natively and
-checks mandatory fields, physical types, enumerations, and IP addresses on both
-reference and candidate output. Official ASIM tester integration, conditional
-requirements, aliases, and complete validation decisions remain outstanding.
+Current partial implementation: mapping approval and compilation check compatible
+targets, conversions, constants, mandatory fields and applicable conditional
+dependencies. The reference workflow executes KQL natively and checks mandatory
+fields, physical types, enumerations, and IP addresses on both reference and
+candidate output. Official ASIM tester integration, complete native conditional
+requirements, aliases, inline validation and validation decisions remain outstanding.
 
 ## Milestone 4 — Agreement, packaging, and release gates
 

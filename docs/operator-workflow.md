@@ -3,7 +3,7 @@
 Status: current
 Audience: security and detection engineers running the parser workflow
 Canonical for: build, cluster and mapping review, catalogue sync, compilation, and generated artifacts
-Last verified: 2026-09-11
+Last verified: 2026-10-03
 
 LogLathe's installed command is `asim-forge`. The distribution and CLI retain that
 name for compatibility with existing environments and artifacts.
@@ -49,7 +49,7 @@ The sample contains nine events in three clusters. The command writes:
 Install the optional review dependency and start Potato:
 
 ```console
-uv sync --extra review
+uv sync --locked --extra review
 uv run potato start artifacts/demo/potato/config.yaml -p 8000
 ```
 
@@ -93,7 +93,11 @@ The catalogue snapshot contains:
 | `catalog-manifest.json` | Source revision, integrity hash, and catalogue coverage |
 
 Human-readable schema descriptions and semantic schema versions are not present in
-the tester CSV. They remain a separate future enrichment concern.
+the tester CSV. Mapping setup pins supported schema versions; the optional
+[Jev experiment](jev-schema-experiment.md) owns its decision definitions separately.
+For the checked reference examples, use the committed
+[CI catalogue snapshot](../evaluation/ci-catalog/README.md) instead of downloading
+another copy. Sync is needed when intentionally selecting or updating a revision.
 
 ## Review ASIM mappings in Potato
 
@@ -147,9 +151,10 @@ overlap with the previous schema. Select and map any suggested field you agree w
 restores the first schema's edits. Each schema's draft is saved independently,
 including edits to shared fields.
 
-Select a mapping in the compact list, then select its exact source text in a
-representative event. NER-style highlights show the template's extracted slots
-and their ASIM labels. A matching span assigns that existing slot. Selecting
+New blank mappings default to **Event text span**. Select a mapping in the compact
+list, then select its exact source text in a representative event. NER-style
+highlights show the template's extracted slots and their ASIM labels. A matching
+span assigns that existing slot. Selecting
 verified fixed template text instead opens **Fixed value for this template** and
 retains the selection as evidence. Choose the ASIM output value, for example
 `Failure` supported by literal `Failed`. Enumerated fields offer the catalogue's
@@ -276,7 +281,7 @@ event-reading baselines. The suggestion, catalogue, and source evidence are froz
 and checked when compiling; use a new empty directory when preparing changed inputs.
 `--cluster-reviews` must identify the exact review state used to prepare the queue.
 
-The [reference pilot](reference-pilot.md#review-mappings-against-native-reference-output)
+The [reference workflow](reference-pilot.md#review-mappings-against-native-reference-output)
 can attach native parser output and source-table values. These are visible to the
 reviewer but never enter the mapping approach's request. Assisted reviews retain
 their own provenance and are not promoted into independent semantic gold. Use the
@@ -397,3 +402,9 @@ decision, promotion, and grouped-split commands.
 
 Use the [evaluation guide](evaluation.md) for approach comparison, controlled
 robustness, corpus benchmarking, metrics, and release-report behavior.
+
+Use the [reference fixture inventory](../evaluation/reference/README.md) for public
+source families and native-parser coverage. The [Jev guide](jev-schema-experiment.md)
+covers the separate schema-ranking experiment, including offline previews, live
+requests, and replay. Its parser-agreement results do not certify schema correctness
+or approve mappings.
