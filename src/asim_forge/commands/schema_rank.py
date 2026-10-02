@@ -45,7 +45,12 @@ def register_schema_rank_parser(
         "--replay", action="store_true", help="Read cached responses only; no network"
     )
     parser.add_argument("--context", choices=("template", "enriched"), default="enriched")
-    parser.add_argument("--nouls", action="store_true", help="Add independent primary-event probes")
+    parser.add_argument("--nouls", action="store_true", help="Add diagnostic semantic probes")
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Use v3 probe answers in a second schema decision (implies --nouls)",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Pinned Jev model version")
     parser.add_argument(
         "--decision-spec",
@@ -134,6 +139,7 @@ def run_schema_rank_command(args: argparse.Namespace) -> None:
         mode="live" if args.live else "replay" if args.replay else "prepare",
         context=args.context,
         nouls=args.nouls,
+        staged=args.staged,
         model=args.model,
         api_key=os.environ.get("TYPESAFE_API_KEY", "") if args.live else "",
         split_provenance=split_provenance,

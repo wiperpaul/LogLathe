@@ -67,6 +67,19 @@ it is a development hypothesis, not a promoted default. See the
 `asim-primary-event-v1` remains the default, and the specification is included in
 cache identity and report provenance so prior trials retain their exact requests.
 
+The opt-in `--decision-spec asim-auth-lifecycle-v3` isolates a different hypothesis:
+explicit authentication lifecycle boundaries, including wireless deauthentication
+and authenticated-session expiry. It retains v1's string format, instructions,
+AuditEvent definition, and source projection. With `--nouls`, it also adds two
+diagnostic questions about authentication relationships and communication
+lifecycle. These do not override the Choice. See the
+[authentication experiment plan](research/jev-auth-lifecycle-experiment.md) for
+offline preparation, controls, and evidence limits. Its enriched Meraki trial
+improved Authentication agreement from 11/15 to 15/15 templates, but adding
+probes or a second staged Choice gave no additional top-choice gain. The
+synthetic alert control exposed a confident Authentication mistake. Both v3
+and staging remain opt-in development experiments.
+
 `--context template` sends just the template. The default, `enriched`, adds source
 vendor/product/table/message-column metadata when present, the first three event
 texts, and each parameter's first three values with a deterministic physical-type
@@ -85,6 +98,15 @@ without another runtime dependency. It pins `jev-1.13.0`; moving model aliases a
 rejected. One Choice asks for the schema. Optional `--nouls` adds a yes/no probe
 for each definition, phrased around the **primary** event. These probes do not
 consume the Choice answer or each other's answers.
+The v3 specification additionally asks its two lifecycle diagnostic questions.
+With v3, `--staged` implies `--nouls` and makes a second schema request using only
+the two lifecycle estimates alongside the original source evidence. It excludes
+the first Choice and primary-schema probe answers from that second request.
+Both stages use the existing request-addressed cache; a case completes only when
+the final Choice succeeds. Reports retain the first-stage response and the final
+request hash. `second-stage-requests.jsonl` records each dependent request before
+it is sent. Prepare mode cannot construct these dependent bodies without actual
+probe answers and explicitly reports that requirement.
 
 TypeSafe describes Choice [confidence](https://docs.typesafe.ai/confidence) as
 derived from the returned distribution. It is not an independent corroborating

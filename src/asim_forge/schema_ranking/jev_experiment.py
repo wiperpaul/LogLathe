@@ -13,12 +13,15 @@ from ..semantic_mapping.types import SemanticMappingInput
 from .approaches.source_concept import SourceConceptSchemaRanker
 from .contracts import SchemaRankingRequest
 from .jev import (
+    AUTH_LIFECYCLE_SPEC_VERSION,
     DEFAULT_MODEL,
     DEFINITION_SOURCES,
     SCHEMA_DEFINITIONS,
     SPEC_VERSION,
+    STAGED_POLICY_VERSION,
     UNSUPPORTED,
     DecisionSpec,
+    build_jev_followup_request,
     build_jev_request,
     request_hash,
 )
@@ -78,6 +81,7 @@ def run_schema_experiment(
     api_key: str = "",
     split_provenance: dict[str, str] | None = None,
     spec_version: DecisionSpec = SPEC_VERSION,
+    staged: bool = False,
 ) -> dict[str, Any]:
     if not inputs:
         raise EvaluationError("The schema experiment requires at least one input")
@@ -85,6 +89,11 @@ def run_schema_experiment(
         raise EvaluationError("The schema experiment requires unique case IDs")
     if mode not in ("prepare", "live", "replay"):
         raise EvaluationError("Unknown schema experiment mode")
+    if staged and spec_version != AUTH_LIFECYCLE_SPEC_VERSION:
+        raise EvaluationError(
+            "Staged classification requires --decision-spec asim-auth-lifecycle-v3"
+        )
+    nouls = nouls or staged
     if mode == "live" and not api_key.strip():
         raise JevError("Set TYPESAFE_API_KEY in the environment before using --live")
     if output.exists():
@@ -152,6 +161,41 @@ def run_schema_experiment(
                     api_key=api_key,
                     spec_version=spec_version,
                 )
+                if staged:
+                    row["probe_stage"] = {
+                        "request_hash": row["request_hash"],
+                        "cache_hit": hit,
+                        "response": response.model_dump(mode="json"),
+                        "elapsed_seconds": round(time.perf_counter() - started, 6),
+                    }
+                    followup = build_jev_followup_request(request, response)
+                    digest = request_hash(followup, catalogue_revision, spec_version=spec_version)
+                    row["final_request_hash"] = digest
+                    # Persist the exact dependent body before sending; never invent probe values.
+                    with (output / "second-stage-requests.jsonl").open(
+                        "a", encoding="utf-8"
+                    ) as file:
+                        file.write(
+                            json.dumps(
+                                {
+                                    "case_id": row["case_id"],
+                                    "request_hash": digest,
+                                    "body": followup.model_dump(mode="json"),
+                                },
+                                sort_keys=True,
+                            )
+                            + "\n"
+                        )
+                    response, final_hit = cached_response(
+                        followup,
+                        catalogue_revision,
+                        cache,
+                        live=mode == "live",
+                        api_key=api_key,
+                        spec_version=spec_version,
+                    )
+                    row["final_cache_hit"] = final_hit
+                    hit = hit and final_hit
                 choice = response.schema_choice
                 top = max(choice.probabilities.values())
                 tied = sum(value == top for value in choice.probabilities.values()) > 1
@@ -198,6 +242,13 @@ def run_schema_experiment(
         "metrics": {name: _metrics(rows, name) for name in ("baseline", "jev")},
         "rows": rows,
     }
+    if staged:
+        report["decision_policy"] = STAGED_POLICY_VERSION
+        report["second_stage_status"] = (
+            "requires_probe_answers"
+            if mode == "prepare"
+            else ("partial" if failure else "completed")
+        )
     (output / "report.json").write_text(
         json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8"
     )
