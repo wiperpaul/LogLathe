@@ -32,8 +32,10 @@ divide rows or allocate different schemas from one product to different splits.
 
 Total: 117 public input rows in three source families. OpenSSH's ten controlled
 variants are additional regression probes, excluded from this public-row count.
-The new fixtures have no generated variants. Only OpenSSH has already undergone
-human cluster review and the reported Jev trial; new clusters are not approved.
+The new fixtures have no generated variants. Only OpenSSH has undergone human
+cluster review. The [Meraki validation trial](../../docs/research/jev-meraki-assessment-2026-10-02.md)
+is complete using unreviewed clusters; it compared 32 templates and 49 of the 52
+inputs represented in their examples. Barracuda test predictions remain reserved.
 
 The test source supplies a balanced 45-event, three-schema comparison, and the
 validation source supplies 52 events across the same three schemas. Report
