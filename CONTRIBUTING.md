@@ -53,8 +53,12 @@ and [roadmap](ROADMAP.md) before proposing changes.
 
 ## Data and security
 
-Evaluation fixtures and examples must be synthetic or suitably sanitized. Do not
-commit operational logs, credentials, customer data, annotation state, generated
+Evaluation fixtures and examples must be synthetic, suitably sanitized, or public
+samples with explicit redistribution rights and retained attribution. Public
+reference fixtures must pin source and parser revisions, preserve source bytes,
+and record licenses and checksums; see the
+[fixture inventory](evaluation/reference/README.md). Do not commit private
+operational logs, credentials, customer data, annotation state, generated
 artifacts, or other sensitive telemetry.
 
 Raw logs are untrusted input. New providers or integrations must keep operational

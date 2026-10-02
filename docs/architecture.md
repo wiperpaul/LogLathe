@@ -3,7 +3,7 @@
 Status: current
 Audience: contributors, integrators, and reviewers of architectural changes
 Canonical for: pipeline boundaries, ownership, and design invariants
-Last verified: 2026-09-11
+Last verified: 2026-10-03
 
 LogLathe is a human-in-the-loop workbench for turning security-log evidence into
 reviewable normalization candidates. Its installed Python distribution and command
@@ -19,7 +19,7 @@ reinterpreting existing ASIM evidence.
 line-oriented logs
       |
       v
-DeepParse mask synthesis and Drain clustering
+DeepParse offline mask synthesis and Drain clustering
       |
       v
 schema-free parsed clusters, representative events, and parameter slots
@@ -74,13 +74,6 @@ are applied explicitly by the evaluation harness and are recorded in the report.
   case, decision, and output revisions are recorded where they apply.
 
 ## Assisted mapping review
-
-The experimental [Jev schema ranker](jev-schema-experiment.md) consumes the same
-source-only semantic inputs in an opt-in evaluation path. Versioned ASIM
-definitions belong to LogLathe; provider distributions remain separate from
-lexical evidence counts. It does not change the build default, mapping approvals,
-or Potato task state. Cached responses and offline preparation/replay keep hosted
-inference outside normal CI.
 
 `mapping_review.py` consumes the existing verified annotation queue and registered
 mapping approaches. Each immutable task binds source evidence, catalogue,
@@ -161,6 +154,15 @@ candidate-schema list. It uses target-neutral source tokens, provides attributab
 evidence, and abstains when there is no evidence or when the leading candidates tie.
 It never predicts target fields.
 
+The experimental [Jev schema ranker](jev-schema-experiment.md) consumes source-only
+evidence in an opt-in evaluation path. LogLathe owns its versioned decision
+definitions for Authentication, NetworkSession, AuditEvent, and Unsupported;
+provider probabilities remain separate from lexical evidence counts. Optional
+boundary and authentication-lifecycle probes are experimental configurations.
+Jev is not a field mapper and does not change the build default, mapping approvals,
+or Potato task state. Offline preparation and cached replay require no hosted
+inference; live requests are explicit and remain outside normal CI.
+
 For compatibility, `clusters.jsonl` still carries a legacy `schema_suggestion`
 projection. `asim_forge.suggestions.suggest_schema` and
 `asim_forge.source_normalization` are compatibility imports rather than the owners
@@ -172,7 +174,7 @@ The stable centre is a target-neutral description of the source event:
 
 ```text
 unstructured text -> DeepParse ---------+
-CEF/JSON/CSV ------> structure adapter --+-> source semantics -> ASIM adapter
+CEF/JSON/CSV ------> planned adapter ---+-> source semantics -> ASIM adapter
                                                   +-----------> future target adapter
 ```
 
@@ -209,7 +211,9 @@ and must not be compared as though the tasks had identical granularity.
 
 Concrete workflows are documented in the [operator guide](operator-workflow.md),
 [evaluation guide](evaluation.md), and [dataset-curation guide](dataset-curation.md).
-The [reference pilot guide](reference-pilot.md) covers native functional checks and
-how public samples enter the existing review workflow.
+The [reference workflow](reference-pilot.md) covers native functional checks and
+how public samples enter the existing review workflow. The
+[fixture inventory](../evaluation/reference/README.md) records the checked source
+families and their coverage limitations.
 Future changes and deliberately deferred work belong in the [roadmap](../ROADMAP.md),
 not in this description of the current system.

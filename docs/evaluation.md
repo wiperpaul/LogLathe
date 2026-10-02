@@ -3,7 +3,7 @@
 Status: current
 Audience: evaluators, approach developers, and release operators
 Canonical for: approaches, metrics, controlled conditions, corpora, and evaluation reports
-Last verified: 2026-09-10
+Last verified: 2026-10-03
 
 This is the canonical operator and metric reference for LogLathe evaluation. It
 covers semantic-mapping comparisons, controlled robustness, and the registered
@@ -39,6 +39,11 @@ or annotation queues, prepares requests offline by default, and requires explici
 `--live` execution. It is not a registered field-mapping approach and does not
 alter the comparison defaults below.
 
+The public-fixture trials compare Jev with native parser schema output, not
+independently adjudicated labels. Their latest frozen comparison and replay
+evidence are linked from the Jev guide. All current trial families are now
+inspected; use a new reserved family for a fresh test after tuning definitions.
+
 Running `evaluation compare` without `--approach` evaluates all seven registered
 approaches in the order below. The three priors appear first because every
 substantive result should be read against a class-imbalance floor, not against
@@ -70,23 +75,21 @@ metrics remain outside the providers.
 
 ## Run a comparison
 
-Synchronize the exact catalogue revision named by the cases, then run the
-comparison:
+For the checked smoke cases, use the committed catalogue and run the comparison
+without a download:
 
 ```powershell
-uv run asim-forge catalog sync `
-  --output artifacts/asim-catalog `
-  --revision 027a0f9338bfabcb27b784571b771c54572ebf01
-
 uv run asim-forge evaluation compare `
   examples/evaluation/semantic-mapping-cases.jsonl `
-  --catalog artifacts/asim-catalog `
+  --catalog evaluation/ci-catalog `
   --output artifacts/semantic-comparison.json
 ```
 
 Repeat `--approach` to select a subset. The terminal summary shows the main point
 estimates, intervals, paired tests, sample-resolution statement, and warnings. The
 optional JSON report also retains every prediction and its evidence for inspection.
+For other cases, reuse a matching snapshot or explicitly
+[sync the exact revision](operator-workflow.md#sync-the-asim-catalogue) they declare.
 
 For a real comparison, evaluate a held-out partition with the pre-label grouping
 and promotion evidence that authenticates it:
@@ -282,7 +285,8 @@ automatically for each semantic corpus and keeps them in a separate section.
 ## Benchmark tracks and corpora
 
 Native parser functional regression is available separately through
-`asim-forge reference`; see the [reference pilot](reference-pilot.md). Its
+`asim-forge reference`; see the [reference workflow](reference-pilot.md) and
+[five-family fixture inventory](../evaluation/reference/README.md). Its
 `asim-parser-silver` captures compare values, physical types, and event retention
 against a pinned executable parser. They are not registered in the corpus benchmark
 below or combined with semantic-development/gold metrics. Public samples enter the

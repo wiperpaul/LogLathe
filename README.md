@@ -20,22 +20,32 @@ candidate, not a production-ready Microsoft Sentinel parser.
 line-oriented logs
       |
       v
-DeepParse mask synthesis + Drain clustering
+DeepParse offline masks + Drain clustering
       |
       v
 typed clusters + representative events + parameter slots
       |                                  |
       v                                  v
-independent cluster review       source-concept schema ranking
+initial Potato cluster review    source-concept schema ranking
       |
       +-- rejected / split / insufficient evidence --> no parser
-      +-- approved but not mapped ------------------> awaiting_mapping
-      +-- approved with complete mapping ----------> parser spec + KQL candidate
+      +-- approved --> frozen queue + source setup + pinned catalogue
+                              |
+                              v
+                  Potato Cluster / Schema / Mappings tabs
+                              |
+                draft / defer / extraction gap --> no parser
+                complete, approved mapping -----> parser spec + KQL candidate
+                                                        |
+                                                        v
+                                             optional native reference checks
 ```
 
 Cluster coherence, semantic suggestions, human mapping decisions, compilation,
 validation, and release remain separate boundaries. In particular, the cluster
 reviewer does not see an ASIM suggestion that could anchor the initial decision.
+The later mapping task retains that decision and its notes, supports one confirmed
+schema per template, and lets the reviewer revisit cluster coherence.
 
 ## What exists today
 
@@ -51,14 +61,25 @@ reviewer does not see an ASIM suggestion that could anchor the initial decision.
 | Priors plus lexical, semantic-frame, matcher-ensemble, and retrieval approaches | Implemented |
 | Ranking, mapping, facet, candidate, robustness, and statistical metrics | Implemented |
 | Evidence-separated corpus reports and evaluation prereleases | Implemented |
-| Integrated ASIM mapping-review UI | Planned |
-| Native Kusto reference fixtures and bounded catalogue checks | Implemented for the OpenSSH pilot |
+| Potato ASIM mapping review with schema-specific fields and span selection | Implemented; manually prepared after cluster review |
+| Editable mapping defaults and setup-supplied device/time fields | Implemented |
+| Native Kusto reference fixtures and bounded catalogue checks | Implemented across five source families |
+| Optional Jev schema-ranking trials, versioned definitions, and cached replay | Implemented; experimental, outside the default build |
+| LLM-assisted critique of attempted mappings | Documented manual practice |
 | Complete ASIM tester integration and Sentinel execution | Planned |
 | Additional normalization targets such as OCSF | Planned; contributions welcome |
 | Automatic production deployment | Not implemented |
 
-LogLathe is pre-alpha. The boundaries and reproducibility contracts are intentional,
-but the continuous reviewer experience is still under construction.
+LogLathe is pre-alpha. The working review path includes required-field controls,
+NER-style span labels, per-schema drafts, and explicit approval gates. Automatic
+handoff between the initial cluster task and mapping task, arbitrary extraction
+repair, specialist assignment, and inline native validation remain future work.
+
+Recent work compares frozen Jev schema definitions on public parser samples.
+Clarified authentication definitions improved the latest source-family comparison;
+extra probes and staging gave no additional top-choice gain. These results measure
+agreement with official parsers and retain unresolved semantic disagreements. See
+the [Jev guide](docs/jev-schema-experiment.md) and its dated assessments.
 
 ## Quick start
 
@@ -81,6 +102,19 @@ uv run asim-forge compile artifacts/demo/clusters.jsonl examples/sample-review/r
 The sample contains nine events in three clusters. Its decisions produce two parser
 candidates and skip one rejected cluster.
 
+To review the clusters yourself, install Potato and start the generated task:
+
+```console
+uv sync --locked --extra review
+uv run potato start artifacts/demo/potato/config.yaml -p 8000
+```
+
+Open `http://localhost:8000`. Cluster approval leaves the task awaiting mapping;
+the [operator guide](docs/operator-workflow.md#review-asim-mappings-in-potato)
+continues through source configuration, schema confirmation, mapping, and compilation.
+For real public examples with checked native output, start with the
+[reference workflow](docs/reference-pilot.md) and [fixture inventory](evaluation/reference/README.md).
+
 Run the test suite:
 
 ```console
@@ -91,15 +125,19 @@ uv run pytest
 
 The [documentation index](docs/README.md) routes readers by task:
 
-- [operator workflow](docs/operator-workflow.md) — build, cluster review, catalogue
-  sync, compilation, and generated artifacts;
+- [operator workflow](docs/operator-workflow.md) — cluster review, source setup,
+  span-based mapping in Potato, compilation, and manual LLM critique;
 - [architecture](docs/architecture.md) — current boundaries and package ownership;
 - [evaluation](docs/evaluation.md) — approaches, metrics, controlled robustness,
   corpora, and release reports;
 - [dataset curation](docs/dataset-curation.md) — fixtures, blinded annotation,
   promotion, grouping, and leakage-resistant splits;
-- [reference pilot](docs/reference-pilot.md) — public SSH samples, native output
+- [reference workflow](docs/reference-pilot.md) — public samples, native output
   comparisons, and a first session in the existing Potato workflow;
+- [reference fixtures](evaluation/reference/README.md) — OpenSSH, Meraki, Barracuda,
+  Carbon Black Cloud, and Cisco ASA coverage and source-family splits;
+- [Jev schema experiment](docs/jev-schema-experiment.md) — offline request previews,
+  explicit live trials, cached replay, and current evidence limits;
 - [roadmap](ROADMAP.md) — current milestone and future work; and
 - [contributing](CONTRIBUTING.md) — development checks and contribution guidance.
 
@@ -119,10 +157,15 @@ The repository contains two deliberately different kinds of checked semantic dat
 - a synthetic smoke fixture that exercises the contracts; and
 - an unadjudicated development set used for error discovery.
 
-Neither supports production-quality claims. Adjudicated `semantic-gold` evidence,
-with source-family grouping and locked held-out splits, is still required before
-comparing approach quality. The [evaluation guide](docs/evaluation.md) defines the
-track and metric boundaries.
+Native parser samples provide a separate `asim-parser-silver` track for functional
+checks and reference-schema agreement. Jev currently considers Authentication,
+NetworkSession, AuditEvent, and Unsupported; its clarified v3 definitions and
+staging are opt-in, and its suggestions do not enter mapping approval automatically.
+
+These checked data sets and parser comparisons do not support production-quality
+claims. Adjudicated `semantic-gold` evidence, with source-family grouping and locked
+held-out splits, is still required before comparing approach quality. The
+[evaluation guide](docs/evaluation.md) defines the track and metric boundaries.
 
 ## Design guarantees
 
@@ -148,8 +191,14 @@ invoke a language model.
 ## Data handling
 
 Generated artifacts, raw operational logs, and Potato annotation state are ignored
-by Git because they may contain sensitive security data. Commit only synthetic or
-suitably sanitized examples and evaluation cases.
+by Git because they may contain sensitive security data. Commit synthetic or
+suitably sanitized examples, or explicitly redistributable public fixtures with
+pinned provenance and attribution. Normal tests and automatic corpus checks use
+local fixtures and the pinned catalogue; they require no provider key or sample
+downloads. Initial dependency installation and explicit full corpus runs can
+access external resources. Live Jev calls require explicit opt-in; trial caches,
+review state, and manually preserved replay archives stay local unless separately
+reviewed for publication.
 
 ## Licence
 

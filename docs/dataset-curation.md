@@ -3,7 +3,7 @@
 Status: current
 Audience: dataset curators, annotators, and evaluation maintainers
 Canonical for: mapping cases, evidence levels, annotation, promotion, grouping, and splits
-Last verified: 2026-09-10
+Last verified: 2026-10-03
 
 This is the canonical guide for turning reviewed Stage 1 clusters into
 provider-neutral semantic-mapping cases. It covers the case contract, evidence
@@ -16,8 +16,10 @@ locked grouped split.
 
 Operational events and reviewer records may be sensitive. Keep generated queues,
 submissions, promoted datasets, and comparison reports under the ignored
-`artifacts/` directory or in another access-controlled location. Commit only
-synthetic or suitably sanitized cases.
+`artifacts/` directory or in another access-controlled location. Commit synthetic
+or suitably sanitized cases, or explicitly redistributable public samples with
+attribution and pinned provenance, following the
+[contribution rules](../CONTRIBUTING.md#data-and-security).
 
 ## Evidence levels
 
@@ -28,12 +30,14 @@ provenance:
 | --- | --- | --- | --- |
 | Contract smoke fixture | [`examples/evaluation/semantic-mapping-cases.jsonl`](../examples/evaluation/semantic-mapping-cases.jsonl) | Validate the JSONL contract and exercise the comparison harness. | Relative or production approach quality. |
 | Checked development labels | The `semantic-development` track, including the [`asim-cef-dev` manifest](../evaluation/corpora/asim-cef-dev/manifest.json) | Error discovery, diagnostics, and development comparison against documented source-field meaning and a pinned ASIM catalogue. | ASIM correctness or approach selection: these labels are not independently adjudicated, and the checked corpus has no grouped split. |
+| Native parser references | The [`asim-parser-silver` fixtures](../evaluation/reference/README.md) and their checked Kusto captures. | Functional regression, event retention, and reference-schema agreement. | Independent semantic correctness; a parser can encode a disputed interpretation. |
 | Single-review calibration | Promotion with `--allow-single-review`; provenance is `human_review`. | Calibrate instructions and find disagreements early. | Held-out approach-selection evidence. |
 | Adjudicated evaluation evidence | Default promotion after two independent annotations and a final adjudication; provenance is `adjudicated`. | Held-out comparisons when paired with verified groups and a locked split. | Broad production quality unless the sampled systems and outcomes support that generalization. |
 
-The fixture format is shared across these levels so the same tooling can load
-them. The dataset's review provenance and split determine what conclusions are
-valid. `semantic-development` labels remain unadjudicated even when a frozen split
+Semantic-mapping cases share one fixture format across their evidence levels;
+native parser captures retain their separate reference contract. The dataset's
+review provenance and split determine what conclusions are valid.
+`semantic-development` labels remain unadjudicated even when a frozen split
 makes their comparison less prone to leakage; only `semantic-gold` is eligible for
 ASIM correctness claims. In particular, retrieval results on the current checked
 development corpus are diagnostic because near-identical source-family siblings
@@ -216,6 +220,11 @@ Raw JSONL and the generated schema are suitable for a small technical pilot and
 for integration with an annotation system. They are curator tooling, not a
 finished general-review interface.
 
+The implemented [Potato mapping task](operator-workflow.md#review-asim-mappings-in-potato)
+is a separate assisted engineering workflow. It displays predictions and can
+display native answers; its saved mappings are not independent annotations and
+cannot substitute for this blinded decision process.
+
 ## 3. Promote reviewed cases
 
 Promotion joins eligible decisions to the exact task evidence and validates their
@@ -300,6 +309,12 @@ Prefer an entire source or product family as the leakage unit when enough data i
 available. A template-family split is acceptable for experiments within one source
 only when mechanically similar templates stay together. Resolve uncertainty by
 using the larger, more conservative group.
+
+The public reference inventory has source-family plans at fixture granularity.
+Inherit those family assignments when creating case-level splits; do not pass a
+fixture plan directly as `--split` for annotation tasks or semantic cases. Once
+test predictions inform a definition or prompt change, treat that family as
+development evidence and reserve another family for the next untouched test.
 
 Validate the promoted artifacts, exact split coverage, groups, and catalogue
 revision together:
