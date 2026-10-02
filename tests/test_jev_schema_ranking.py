@@ -14,10 +14,14 @@ from asim_forge.cli import main
 from asim_forge.evaluation import load_semantic_mapping_cases
 from asim_forge.schema_ranking import jev_client
 from asim_forge.schema_ranking.jev import (
+    AUTH_LIFECYCLE_SPEC_VERSION,
     DEFAULT_MODEL,
     SCHEMA_DEFINITIONS,
+    SPEC_VERSION,
+    STRUCTURED_SPEC_VERSION,
     JevNoul,
     JevResponse,
+    build_jev_followup_request,
     build_jev_request,
     request_hash,
 )
@@ -119,6 +123,319 @@ def test_cache_identity_includes_context_questions_model_and_catalogue(source):
     )
     with pytest.raises(ValueError):
         build_jev_request(source, model="jev-latest")
+
+
+def test_structured_questions_preserve_projection_and_use_matching_probe_definition(source):
+    old = build_jev_request(source)
+    new = build_jev_request(source, spec_version=STRUCTURED_SPEC_VERSION, nouls=True)
+    assert new.state == old.state
+    assert "gold-label" not in new.model_dump_json()
+    definition = new.questions["schema"].criteria["AuditEvent"]
+    assert isinstance(definition, dict)
+    assert set(definition) == {"covers", "not_for", "missing_context", "examples"}
+    probe = new.questions["primary_AuditEvent"].instructions
+    assert isinstance(probe, dict) and probe["definition"] == definition
+    assert "Meraki" not in json.dumps(new.model_dump()["questions"])
+    assert request_hash(old, REVISION) != request_hash(
+        new, REVISION, spec_version=STRUCTURED_SPEC_VERSION
+    )
+    # Specification provenance separates even an identical wire body.
+    assert request_hash(old, REVISION) != request_hash(
+        old, REVISION, spec_version=STRUCTURED_SPEC_VERSION
+    )
+
+
+def test_v1_frozen_example_hash_is_unchanged():
+    case = load_semantic_mapping_cases(Path("examples/evaluation/semantic-mapping-cases.jsonl"))[0]
+    assert request_hash(build_jev_request(case.input), case.catalogue_revision) == (
+        "0c83d27fb649fdc71c3e005cc9b59e044d4ecf3272324d0977b58263082cbb20"
+    )
+
+
+@pytest.mark.parametrize("spec_version", [STRUCTURED_SPEC_VERSION, AUTH_LIFECYCLE_SPEC_VERSION])
+def test_opt_in_experiment_cache_and_cli_provenance(tmp_path, source, monkeypatch, spec_version):
+    sender = Mock(return_value=JevResponse.model_validate(response_payload()))
+    monkeypatch.setattr(jev_client, "send_request", sender)
+    inputs = [SchemaExperimentInput(case_id="probe", source=source)]
+    cache = tmp_path / "cache"
+    live = run_schema_experiment(
+        inputs,
+        catalogue_revision=REVISION,
+        cache=cache,
+        spec_version=spec_version,
+        output=tmp_path / "live",
+        mode="live",
+        api_key="test-key",
+    )
+    sender.reset_mock(side_effect=True)
+    sender.side_effect = AssertionError("network")
+    replay = run_schema_experiment(
+        inputs,
+        catalogue_revision=REVISION,
+        cache=cache,
+        spec_version=spec_version,
+        output=tmp_path / "replay",
+        mode="replay",
+    )
+    assert live["spec_version"] == replay["spec_version"] == spec_version
+    assert replay["cache_hits"] == 1
+    assert live["rows"][0]["jev"] == replay["rows"][0]["jev"]
+    sender.assert_not_called()
+    with pytest.raises(JevError, match="No cached"):
+        run_schema_experiment(
+            inputs,
+            catalogue_revision=REVISION,
+            cache=cache,
+            output=tmp_path / "wrong-spec",
+            mode="replay",
+            spec_version=SPEC_VERSION,
+        )
+    output = tmp_path / "cli"
+    main(
+        [
+            "evaluation",
+            "schema-rank",
+            "examples/evaluation/semantic-mapping-cases.jsonl",
+            "--catalog",
+            "evaluation/ci-catalog",
+            "--output",
+            str(output),
+            "--decision-spec",
+            spec_version,
+        ]
+    )
+    assert json.loads((output / "report.json").read_text())["spec_version"] == spec_version
+
+
+def test_auth_lifecycle_isolates_boundaries_and_preserves_source_projection(source):
+    old = build_jev_request(source, nouls=True)
+    new = build_jev_request(source, spec_version=AUTH_LIFECYCLE_SPEC_VERSION, nouls=True)
+    assert new.state == old.state
+    assert "gold-label" not in new.model_dump_json()
+    assert new.questions["schema"].instructions == old.questions["schema"].instructions
+    changed = {
+        name
+        for name, definition in old.questions["schema"].criteria.items()
+        if new.questions["schema"].criteria[name] != definition
+    }
+    assert changed == {"Authentication", "NetworkSession"}
+    assert new.questions["primary_AuditEvent"] == old.questions["primary_AuditEvent"]
+    assert "Meraki" not in json.dumps(new.model_dump()["questions"])
+    assert len(new.questions) == 6
+    assert len(build_jev_request(source, spec_version=AUTH_LIFECYCLE_SPEC_VERSION).questions) == 1
+    assert request_hash(old, REVISION) != request_hash(
+        new, REVISION, spec_version=AUTH_LIFECYCLE_SPEC_VERSION
+    )
+
+
+def test_auth_diagnostic_disagreements_survive_replay_without_overriding_choice(
+    tmp_path, source, monkeypatch
+):
+    payload = response_payload(nouls=True, choice="NetworkSession")
+    payload["answers"]["authentication_relationship_change"] = {"type": "noul", "noul": 0.99}
+    payload["answers"]["communication_lifecycle"] = {"type": "noul", "noul": 0.01}
+    response = JevResponse.model_validate(payload)
+    request = build_jev_request(source, spec_version=AUTH_LIFECYCLE_SPEC_VERSION, nouls=True)
+    response.validate_for(request)
+    missing = response.model_copy(update={"answers": response.answers.copy()})
+    del missing.answers["communication_lifecycle"]
+    with pytest.raises(ValueError, match="question IDs"):
+        missing.validate_for(request)
+    monkeypatch.setattr(jev_client, "send_request", Mock(return_value=response))
+    inputs = [SchemaExperimentInput(case_id="conflicting-probes", source=source)]
+    live = run_schema_experiment(
+        inputs,
+        output=tmp_path / "live",
+        mode="live",
+        api_key="test-key",
+        catalogue_revision=REVISION,
+        cache=tmp_path / "cache",
+        spec_version=AUTH_LIFECYCLE_SPEC_VERSION,
+        nouls=True,
+    )
+    sender = Mock(side_effect=AssertionError("network"))
+    monkeypatch.setattr(jev_client, "send_request", sender)
+    replay = run_schema_experiment(
+        inputs,
+        output=tmp_path / "replay",
+        mode="replay",
+        catalogue_revision=REVISION,
+        cache=tmp_path / "cache",
+        spec_version=AUTH_LIFECYCLE_SPEC_VERSION,
+        nouls=True,
+    )
+    assert replay["cache_hits"] == 1
+    result = replay["rows"][0]["jev"]
+    assert result == live["rows"][0]["jev"]
+    assert result["selected_schema"] == "NetworkSession"
+    assert result["response"]["answers"]["authentication_relationship_change"]["noul"] == 0.99
+    sender.assert_not_called()
+
+
+def test_auth_lifecycle_diagnostics_keep_ambiguity_and_labels_out_of_requests():
+    cases = load_semantic_mapping_cases(Path("examples/evaluation/auth-lifecycle-cases.jsonl"))
+    inputs = [from_labelled_case(case) for case in cases]
+    assert len(inputs) == 8
+    assert sum(item.expected_schema is None for item in inputs) == 1
+    assert all(item.label_source == "synthetic" for item in inputs)
+    for item in inputs:
+        request = build_jev_request(item.source, spec_version=AUTH_LIFECYCLE_SPEC_VERSION)
+        assert "expected_schema" not in request.model_dump_json()
+        assert item.case_id not in request.model_dump_json()
+
+
+def lifecycle_response(*, authentication=0.99, communication=0.01):
+    payload = response_payload(nouls=True, choice="NetworkSession")
+    payload["answers"]["authentication_relationship_change"] = {
+        "type": "noul",
+        "noul": authentication,
+    }
+    payload["answers"]["communication_lifecycle"] = {"type": "noul", "noul": communication}
+    return JevResponse.model_validate(payload)
+
+
+def test_followup_projection_uses_only_semantic_probes_and_hashes_their_values(source):
+    request = build_jev_request(source, spec_version=AUTH_LIFECYCLE_SPEC_VERSION, nouls=True)
+    response = lifecycle_response()
+    followup = build_jev_followup_request(request, response)
+    assert set(followup.questions) == {"schema"}
+    assert followup.questions["schema"].criteria == request.questions["schema"].criteria
+    observations = followup.state["semantic_observations"]
+    assert isinstance(observations, dict) and set(observations) == {
+        "authentication_relationship_change",
+        "communication_lifecycle",
+    }
+    assert {
+        key: value for key, value in followup.state.items() if key != "semantic_observations"
+    } == request.state
+    assert "gold-label" not in followup.model_dump_json()
+    assert "primary_" not in followup.model_dump_json()
+    assert "confidence" not in json.dumps(observations)
+    changed_choice = JevResponse.model_validate(response_payload(nouls=True, choice="AuditEvent"))
+    changed_choice.answers.update({name: response.answers[name] for name in observations})
+    assert build_jev_followup_request(request, changed_choice) == followup
+    other = build_jev_followup_request(request, lifecycle_response(authentication=0.2))
+    assert request_hash(
+        followup, REVISION, spec_version=AUTH_LIFECYCLE_SPEC_VERSION
+    ) != request_hash(other, REVISION, spec_version=AUTH_LIFECYCLE_SPEC_VERSION)
+    with pytest.raises(ValueError, match="lifecycle probes"):
+        build_jev_followup_request(
+            build_jev_request(source), JevResponse.model_validate(response_payload())
+        )
+
+
+def test_staged_experiment_replays_both_requests_and_retains_first_choice(
+    tmp_path, source, monkeypatch
+):
+    first, final = lifecycle_response(), JevResponse.model_validate(response_payload())
+    sender = Mock(side_effect=[first, final])
+    monkeypatch.setattr(jev_client, "send_request", sender)
+    inputs = [SchemaExperimentInput(case_id="staged", source=source)]
+    live = run_schema_experiment(
+        inputs,
+        catalogue_revision=REVISION,
+        output=tmp_path / "live",
+        cache=tmp_path / "cache",
+        mode="live",
+        api_key="test-key",
+        spec_version=AUTH_LIFECYCLE_SPEC_VERSION,
+        staged=True,
+    )
+    assert sender.call_count == 2
+    assert live["nouls"] is True
+    row = live["rows"][0]
+    assert row["jev"]["selected_schema"] == "Authentication"
+    assert row["probe_stage"]["response"]["answers"]["schema"]["choice"] == "NetworkSession"
+    final_wire = json.loads((tmp_path / "live/second-stage-requests.jsonl").read_text())
+    assert final_wire["request_hash"] == row["final_request_hash"]
+    assert final_wire["body"] == sender.call_args_list[1].args[0].model_dump(mode="json")
+    sender.reset_mock(side_effect=True)
+    sender.side_effect = AssertionError("network")
+    replay = run_schema_experiment(
+        inputs,
+        catalogue_revision=REVISION,
+        output=tmp_path / "replay",
+        cache=tmp_path / "cache",
+        mode="replay",
+        spec_version=AUTH_LIFECYCLE_SPEC_VERSION,
+        staged=True,
+    )
+    assert replay["cache_hits"] == 1
+    assert replay["rows"][0]["probe_stage"]["cache_hit"] is True
+    assert replay["rows"][0]["final_cache_hit"] is True
+    assert replay["rows"][0]["jev"] == row["jev"]
+    sender.assert_not_called()
+
+
+def test_staged_failure_preserves_probe_result_and_resumes_from_cache(
+    tmp_path, source, monkeypatch
+):
+    sender = Mock(side_effect=[lifecycle_response(), JevError("Jev request failed with HTTP 529")])
+    monkeypatch.setattr(jev_client, "send_request", sender)
+    inputs = [SchemaExperimentInput(case_id="partial", source=source)]
+    with pytest.raises(JevError, match="partial report"):
+        run_schema_experiment(
+            inputs,
+            catalogue_revision=REVISION,
+            output=tmp_path / "partial",
+            cache=tmp_path / "cache",
+            mode="live",
+            api_key="test-key",
+            spec_version=AUTH_LIFECYCLE_SPEC_VERSION,
+            staged=True,
+        )
+    report = json.loads((tmp_path / "partial/report.json").read_text())
+    assert report["completed"] == 0
+    assert report["rows"][0]["status"] == "error"
+    assert (
+        report["rows"][0]["probe_stage"]["response"]["answers"]["schema"]["choice"]
+        == "NetworkSession"
+    )
+    assert report["rows"][0]["jev"] is None
+    sender.reset_mock(side_effect=True)
+    sender.return_value = JevResponse.model_validate(response_payload())
+    resumed = run_schema_experiment(
+        inputs,
+        catalogue_revision=REVISION,
+        output=tmp_path / "resumed",
+        cache=tmp_path / "cache",
+        mode="live",
+        api_key="test-key",
+        spec_version=AUTH_LIFECYCLE_SPEC_VERSION,
+        staged=True,
+    )
+    assert sender.call_count == 1 and resumed["completed"] == 1
+    assert resumed["rows"][0]["probe_stage"]["cache_hit"] is True
+
+
+def test_staged_prepare_does_not_invent_dependent_answers_and_requires_v3(tmp_path, source):
+    inputs = [SchemaExperimentInput(case_id="prepare", source=source)]
+    with pytest.raises(ValueError, match="requires --decision-spec"):
+        run_schema_experiment(
+            inputs,
+            catalogue_revision=REVISION,
+            output=tmp_path / "invalid",
+            cache=tmp_path / "cache",
+            staged=True,
+        )
+    main(
+        [
+            "evaluation",
+            "schema-rank",
+            "examples/evaluation/auth-lifecycle-cases.jsonl",
+            "--catalog",
+            "evaluation/ci-catalog",
+            "--output",
+            str(tmp_path / "prepare"),
+            "--decision-spec",
+            AUTH_LIFECYCLE_SPEC_VERSION,
+            "--staged",
+        ]
+    )
+    report = json.loads((tmp_path / "prepare/report.json").read_text())
+    assert report["nouls"] is True and report["completed"] == 0
+    assert report["second_stage_status"] == "requires_probe_answers"
+    assert not (tmp_path / "prepare/second-stage-requests.jsonl").exists()
 
 
 @pytest.mark.parametrize(

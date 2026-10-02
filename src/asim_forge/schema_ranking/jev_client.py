@@ -11,7 +11,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import ValidationError
 
-from .jev import ENDPOINT, JevRequest, JevResponse, request_hash
+from .jev import ENDPOINT, SPEC_VERSION, DecisionSpec, JevRequest, JevResponse, request_hash
 
 
 class JevError(ValueError):
@@ -66,9 +66,10 @@ def cached_response(
     *,
     live: bool = False,
     api_key: str = "",
+    spec_version: DecisionSpec = SPEC_VERSION,
 ) -> tuple[JevResponse, bool]:
     """Return (response, cache_hit). Replay never falls through to the network."""
-    digest = request_hash(request, catalogue_revision)
+    digest = request_hash(request, catalogue_revision, spec_version=spec_version)
     path = cache_dir / f"{digest}.json"
     if path.exists():
         try:

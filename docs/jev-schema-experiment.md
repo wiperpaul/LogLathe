@@ -25,6 +25,12 @@ enriched Choice agreed on 9/10, compared with the lexical baseline's 3/10. All 2
 live requests replayed offline. This small public-source test is now inspected;
 its results should not be used to tune a system and claim untouched test quality.
 
+The [AuditEvent boundary experiment](research/jev-audit-boundaries-2026-10-02.md)
+tested an opt-in structured rubric with 52 new requests. Synthetic agreement rose
+from 9/10 to 10/10, but Meraki template agreement fell from 13/32 to 11/32 and
+AuditEvent agreement stayed at 0/15. The original rubric remains the default;
+semantic adjudication is needed before tuning toward the disputed parser labels.
+
 Jev is a plausible decision engine at the existing schema-ranking boundary:
 source template evidence goes in, a schema suggestion comes out. LogLathe owns
 the ASIM definitions. Jev does not replace the catalogue, field mapper, Potato
@@ -53,6 +59,27 @@ It asks about the event's primary action, rather than assigning NetworkSession
 because an event happens to contain an address or port. The definitions contain
 no vendor-specific demonstrations, SSH rules, field mappings, or gold examples.
 
+The opt-in `--decision-spec asim-boundaries-v2` uses structured coverage,
+exclusions, and generic constructed examples following Jev's documented guidance.
+It clarifies administrative resource operations and runtime-state boundaries;
+it is a development hypothesis, not a promoted default. See the
+[AuditEvent investigation](research/jev-audit-boundaries-2026-10-02.md).
+`asim-primary-event-v1` remains the default, and the specification is included in
+cache identity and report provenance so prior trials retain their exact requests.
+
+The opt-in `--decision-spec asim-auth-lifecycle-v3` isolates a different hypothesis:
+explicit authentication lifecycle boundaries, including wireless deauthentication
+and authenticated-session expiry. It retains v1's string format, instructions,
+AuditEvent definition, and source projection. With `--nouls`, it also adds two
+diagnostic questions about authentication relationships and communication
+lifecycle. These do not override the Choice. See the
+[authentication experiment plan](research/jev-auth-lifecycle-experiment.md) for
+offline preparation, controls, and evidence limits. Its enriched Meraki trial
+improved Authentication agreement from 11/15 to 15/15 templates, but adding
+probes or a second staged Choice gave no additional top-choice gain. The
+synthetic alert control exposed a confident Authentication mistake. Both v3
+and staging remain opt-in development experiments.
+
 `--context template` sends just the template. The default, `enriched`, adds source
 vendor/product/table/message-column metadata when present, the first three event
 texts, and each parameter's first three values with a deterministic physical-type
@@ -71,6 +98,15 @@ without another runtime dependency. It pins `jev-1.13.0`; moving model aliases a
 rejected. One Choice asks for the schema. Optional `--nouls` adds a yes/no probe
 for each definition, phrased around the **primary** event. These probes do not
 consume the Choice answer or each other's answers.
+The v3 specification additionally asks its two lifecycle diagnostic questions.
+With v3, `--staged` implies `--nouls` and makes a second schema request using only
+the two lifecycle estimates alongside the original source evidence. It excludes
+the first Choice and primary-schema probe answers from that second request.
+Both stages use the existing request-addressed cache; a case completes only when
+the final Choice succeeds. Reports retain the first-stage response and the final
+request hash. `second-stage-requests.jsonl` records each dependent request before
+it is sent. Prepare mode cannot construct these dependent bodies without actual
+probe answers and explicitly reports that requirement.
 
 TypeSafe describes Choice [confidence](https://docs.typesafe.ai/confidence) as
 derived from the returned distribution. It is not an independent corroborating
