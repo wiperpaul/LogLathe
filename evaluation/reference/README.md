@@ -35,7 +35,10 @@ variants are additional regression probes, excluded from this public-row count.
 The new fixtures have no generated variants. Only OpenSSH has undergone human
 cluster review. The [Meraki validation trial](../../docs/research/jev-meraki-assessment-2026-10-02.md)
 is complete using unreviewed clusters; it compared 32 templates and 49 of the 52
-inputs represented in their examples. Barracuda test predictions remain reserved.
+inputs represented in their examples. The subsequent
+[Barracuda test trial](../../docs/research/jev-barracuda-assessment-2026-10-02.md)
+used unchanged definitions and compared ten templates representing 26 of its 45
+inputs. Its predictions are now inspected; its clusters remain unreviewed.
 
 The test source supplies a balanced 45-event, three-schema comparison, and the
 validation source supplies 52 events across the same three schemas. Report

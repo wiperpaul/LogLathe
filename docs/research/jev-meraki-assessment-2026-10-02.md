@@ -24,7 +24,9 @@ All 64 distinct live requests succeeded and validated, with zero cache hits.
 Offline replay reproduced request bodies, parsed provider responses, baseline
 results, and all reference-agreement reports with provider calls blocked. No
 production code, model version, or decision definition changed during the trial.
-Barracuda test predictions remain unexamined.
+Barracuda test predictions remained unexamined at this point. The subsequent
+[Barracuda assessment](jev-barracuda-assessment-2026-10-02.md) ran with these
+definitions unchanged at the user's request.
 
 ## Frozen setup and denominators
 

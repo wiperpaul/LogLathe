@@ -19,6 +19,12 @@ Enrichment did not improve agreement, and a constant schema prediction exceeded
 Jev's template score. The assessment records the schema-boundary review needed
 before changing definitions or examining Barracuda test predictions.
 
+The subsequent [Barracuda test assessment](research/jev-barracuda-assessment-2026-10-02.md)
+used those definitions unchanged. Template-only Choice agreed on 10/10 templates;
+enriched Choice agreed on 9/10, compared with the lexical baseline's 3/10. All 20
+live requests replayed offline. This small public-source test is now inspected;
+its results should not be used to tune a system and claim untouched test quality.
+
 Jev is a plausible decision engine at the existing schema-ranking boundary:
 source template evidence goes in, a schema suggestion comes out. LogLathe owns
 the ASIM definitions. Jev does not replace the catalogue, field mapper, Potato
