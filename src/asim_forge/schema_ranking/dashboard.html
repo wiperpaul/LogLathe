@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>LogLathe · Classifier replay</title>
+<style>
+:root{color-scheme:dark;--bg:#101210;--surface:#191c18;--line:#30362d;--ink:#e4e8de;--muted:#a0aa99;--faint:#737d6d;--green:#b7d79b;--amber:#e6ba81;--blue:#a9c9d7;--audit:#c8b5da;--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;--sans:system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--sans)}
+button,select,input{font:inherit}
+button,select{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:9px 13px;cursor:pointer}
+button:hover,select:hover{border-color:var(--muted)}
+button:disabled{opacity:.35;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+button.primary{background:var(--green);border-color:var(--green);color:#152010;font-weight:650}
+h1,h2,h3,p{margin:0}
+h1{font-size:30px;font-weight:550;letter-spacing:-1px;line-height:1.2}
+h2{font-size:13px;font-weight:550}
+h3{font-size:15px;font-weight:550}
+small{font-size:12px;color:var(--muted)}
+.mono{font-family:var(--mono)}
+.overline{font:11px/1.5 var(--mono);letter-spacing:1.3px;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.page{max-width:1700px;margin:auto;padding:24px 32px 22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:17px;gap:20px}
+.brand{font-weight:600;letter-spacing:-.3px}
+.brand span{color:var(--muted);font-weight:400;margin-left:14px}
+.mode{display:flex;align-items:center;gap:8px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:25px;padding:26px 0 20px}
+.hero p{color:var(--muted);margin-top:9px;max-width:650px}
+.controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.controls label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.transport{display:flex;align-items:center;gap:8px}
+.progress-area{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 0 16px;margin-bottom:22px}
+.progress-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.progress-header strong{color:var(--ink);font-weight:500}
+.timeline{display:grid;grid-template-columns:repeat(auto-fit,minmax(7px,1fr));gap:4px}
+.tick{padding:0;min-width:0;height:13px;background:#242a21;border:0;border-radius:2px}
+.tick.match{background:#5a7150}.tick.differ{background:#99724b}.tick.unknown{background:#3f4940}
+.tick.future{opacity:.3}.tick.current{outline:2px solid var(--ink);outline-offset:2px;opacity:1}
+.workspace{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.02fr) minmax(0,.85fr);gap:28px}
+.section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.section-heading .number{color:var(--faint);margin-right:8px}
+.source-box{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:19px}
+.source-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.source-name{font-size:18px;font-weight:500;letter-spacing:-.3px}
+.chip{font:11px/1.5 var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:3px 7px;white-space:nowrap}
+.source-box pre{font:14px/1.8 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:9px 0 18px;color:var(--ink)}
+.slot-token{color:var(--green);background:#b7d79b12;padding:2px 0;border-radius:3px}
+.rule{border-top:1px solid var(--line);padding-top:17px}
+.example{padding:14px 0;border-bottom:1px solid var(--line)}
+.example:last-child{border:0;padding-bottom:0}
+.example-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;font:11px var(--mono);color:var(--muted);margin-bottom:7px}
+.example-text{font:13px/1.7 var(--mono);overflow-wrap:anywhere}.ref-label{color:var(--green)}
+.slots{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}.slots .chip{white-space:normal;overflow-wrap:anywhere}
+details{margin-top:15px}summary{cursor:pointer;color:var(--muted);font-size:12px;padding:3px 0}
+.evidence-limit{margin-top:14px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.classifier{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:0;padding:16px 0;border-bottom:1px solid var(--line)}
+.classifier:hover{background:#ffffff04;border-color:var(--line)}
+.classifier.active{box-shadow:inset 3px 0 var(--green);padding-left:13px;background:#b7d79b07}
+.lane-top{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.lane-title{font-size:14px;font-weight:550}.lane-count{font:12px var(--mono);color:var(--muted);white-space:nowrap}
+.lane-detail{font-size:11px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+.lane-choice{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap}
+.choice-name{font-size:17px;font-weight:500;letter-spacing:-.3px}
+.status{font:11px/1.5 var(--mono);display:inline-flex;align-items:center;gap:5px;border-radius:3px;padding:3px 6px;background:#ffffff06;color:var(--muted)}
+.status.match{color:var(--green);background:#b7d79b12}.status.differ{color:var(--amber);background:#e6ba8112}
+.score-strip{display:flex;gap:3px;height:5px;margin-top:12px;overflow:hidden;border-radius:2px;background:#282f25}
+.score-strip span{height:100%;min-width:0;transition:width .3s}
+.schema-auth{background:var(--green)}.schema-net{background:var(--blue)}.schema-audit{background:var(--audit)}.schema-other{background:var(--faint)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;font:10px var(--mono);color:var(--muted)}
+.legend i{display:inline-block;width:6px;height:6px;border-radius:1px;margin-right:5px}
+.decision{padding-left:22px;border-left:1px solid var(--line);min-width:0}
+.decision-head{margin-bottom:19px}.decision-name{font-size:24px;font-weight:500;letter-spacing:-.7px;margin-top:8px;overflow-wrap:anywhere}
+.decision-state{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.reference{margin-top:18px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.reference strong{display:block;font-size:15px;font-weight:500;margin:5px 0}.reference p{font-size:12px;color:var(--muted)}
+.distribution{margin:18px 0 23px}.probability{display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:12px;font-size:12px}
+.probability .track{grid-column:1/-1;height:4px;background:#282f25;border-radius:2px;overflow:hidden}
+.probability .fill{height:100%;transition:width .3s}
+.value{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.probe-heading{margin-top:22px;margin-bottom:14px}.probe{margin-bottom:15px}
+.probe label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}
+.probe .track{height:4px;margin-top:7px;background:#282f25;border-radius:2px;overflow:hidden}
+.probe .fill{height:100%;background:#8eaa78;transition:width .3s}.probe details{margin-top:5px}
+.probe details p{font-size:12px;color:var(--muted);margin-top:7px;overflow-wrap:anywhere}
+.empty{font-size:12px;color:var(--muted);padding:9px 0}
+.stage{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-top:17px;font:12px var(--mono);color:var(--muted);flex-wrap:wrap}
+.stage strong{font-weight:400;color:var(--ink)}.footnote{font-size:11px;color:var(--muted);margin-top:14px}
+.footer{border-top:1px solid var(--line);margin-top:26px;padding-top:16px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.footer strong{font-size:23px;font-weight:500;font-family:var(--mono);margin-right:10px;font-variant-numeric:tabular-nums}
+.footer details{margin:0;max-width:800px}.hash{font:11px/1.8 var(--mono);overflow-wrap:anywhere;color:var(--muted)}
+.spec-entry{margin:10px 0;color:var(--muted);font-size:12px;overflow-wrap:anywhere}.spec-entry strong{color:var(--ink);font-weight:500}
+.fields{font:12px/1.8 var(--mono);color:var(--muted);overflow-wrap:anywhere}.filter-select{max-width:240px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+@media(min-width:1500px){.page{padding:28px 45px}.workspace{gap:38px}.source-box{padding:23px}.classifier{padding-top:19px;padding-bottom:19px}}
+@media(max-width:1100px){.workspace{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.decision{grid-column:1/-1;border-left:0;border-top:1px solid var(--line);padding:20px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:24px}.hero{align-items:flex-start;flex-direction:column}.decision-head{margin-bottom:0}.decision #decision-details{min-width:0}}
+@media(max-width:650px){.page{padding:18px}.workspace{grid-template-columns:1fr;gap:25px}.decision{display:block}.decision #decision-details{margin-top:22px}.topbar{align-items:flex-start}.brand span{display:block;margin:3px 0 0;font-size:12px}h1{font-size:26px}.controls{width:100%}.filter-select{max-width:100%}.controls label{flex-wrap:wrap}.progress-header{align-items:flex-start;flex-direction:column}.timeline{grid-template-columns:repeat(auto-fit,minmax(9px,1fr));row-gap:6px}.tick{height:15px}.source-box{padding:15px}.transport button{min-height:42px}.source-meta{flex-wrap:wrap}.footer{gap:14px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="topbar"><div class="brand">LogLathe <span>Security event classification</span></div><div class="mode overline"><span class="dot"></span>Recorded replay</div></header>
+  <section class="hero"><div><div class="overline">ASIM · Template by template</div><h1>Watch the schema decision.</h1><p>One source pattern. Every classifier. Inspect the evidence, the probabilities, and where the decisions diverge.</p></div><div class="controls"><div class="transport"><button id="previous" aria-label="Previous template">←</button><button id="play" class="primary">▶ Play</button><button id="next" aria-label="Next template">→</button></div><label>Speed <select id="speed" aria-label="Playback speed"><option value="3500">Slow</option><option value="2000" selected>Normal</option><option value="800">Fast</option></select></label><select id="filter" class="filter-select" aria-label="Template filter"><option value="all">All templates</option><option value="changed">Classifier choices differ</option><option value="disagree">Reference disagreements</option><option value="unknown">Incomplete reference</option></select></div></section>
+  <section class="progress-area"><div class="progress-header"><span class="overline">Replay position <strong id="position"></strong></span><span class="overline" id="timeline-caption">Match · Different · No reference</span></div><div id="timeline" class="timeline" aria-label="Template navigation"></div></section>
+  <div class="workspace">
+    <section><div class="section-heading overline"><span><span class="number">01</span>Source evidence</span><span id="example-count"></span></div><div class="source-box"><div class="source-meta"><div><div class="overline" id="vendor"></div><div class="source-name" id="product"></div></div><span id="cluster" class="chip"></span></div><div class="overline">Drain / DeepParse template</div><pre id="template"></pre><div class="rule"><div class="overline">Representative events</div><div id="examples"></div></div><details id="slot-details"><summary>Extracted parameters</summary><div id="slots" class="slots"></div></details></div><p id="evidence-limit" class="evidence-limit"></p></section>
+    <section><div class="section-heading overline"><span><span class="number">02</span>Classifier decisions</span><span id="classifier-count"></span></div><div id="classifiers"></div><div class="legend"><span><i class="schema-auth"></i>Authentication</span><span><i class="schema-net"></i>NetworkSession</span><span><i class="schema-audit"></i>AuditEvent</span><span><i class="schema-other"></i>Other / Unsupported</span></div><p class="footnote">Jev bars show probabilities. Local baselines show evidence or approach scores; those values are not model probabilities.</p></section>
+    <aside class="decision"><div><div class="section-heading overline"><span><span class="number">03</span>Decision detail</span></div><div class="decision-head"><div class="overline" id="active-name"></div><h2 id="selected-schema" class="decision-name"></h2><div id="decision-state" class="decision-state"></div></div><div id="reference" class="reference"></div><div id="distribution" class="distribution"></div><div id="stage" class="stage"></div></div><div id="decision-details"><div class="overline probe-heading" id="probe-title">Independent semantic questions</div><div id="probes"></div><details id="specification"><summary>Schema definitions used</summary><div id="criteria"></div></details><details id="field-details"><summary>Suggested field mappings</summary><div id="fields" class="fields"></div></details><p id="recorded-meta" class="footnote"></p></div></aside>
+  </div>
+  <footer class="footer"><div><strong id="visited">1</strong><small>templates reached in playback</small><div class="footnote">Reference agreement is not independent semantic accuracy. Playback animates saved decisions; it does not train or call Jev.</div></div><details><summary>Trial provenance</summary><div id="provenance" class="hash"></div></details></footer>
+  <p id="announcement" class="sr-only" aria-live="polite"></p>
+</main>
+<script id="replay-data" type="application/json">__DASHBOARD_DATA__</script>
+<script>
+(() => {
+  'use strict';
+  const data = JSON.parse(document.getElementById('replay-data').textContent);
+  const $ = id => document.getElementById(id);
+  const el = (tag, text, cls) => { const node = document.createElement(tag); if(text !== undefined) node.textContent = text; if(cls) node.className = cls; return node; };
+  let visible = data.cases.map((_, i) => i), position = 0, reached = 0, timer = null;
+  let active = (data.classifiers.find(c => /probe|noul/i.test(c.label)) || data.classifiers.find(c => /v3/i.test(c.label)) || data.classifiers[0]).id;
+  const schemaClass = name => name === 'Authentication' ? 'schema-auth' : name === 'NetworkSession' ? 'schema-net' : name === 'AuditEvent' ? 'schema-audit' : 'schema-other';
+  const percentage = value => (value * 100).toFixed(value > .01 && value < .99 ? 1 : 0) + '%';
+  const state = (item, prediction) => !item.reference.schema ? 'unknown' : !prediction || !prediction.selected ? 'abstain' : prediction.selected === item.reference.schema ? 'match' : 'differ';
+  const statusText = {match:'Matches reference', differ:'Different', unknown:'No template reference', abstain:'No selection'};
+  function stats(id) {
+    let eligible = 0, available = 0, matched = 0;
+    visible.slice(0, reached + 1).forEach(index => { const item = data.cases[index], p = item.predictions[id]; if(item.reference.schema){eligible++; if(p && p.scores && Object.keys(p.scores).length){available++; if(p.selected === item.reference.schema) matched++;}} });
+    return {eligible, available, matched};
+  }
+  function stop() { if(timer !== null) clearTimeout(timer); timer = null; $('play').textContent = '▶ Play'; $('play').setAttribute('aria-pressed','false'); }
+  function schedule() { timer = setTimeout(() => { if(position >= visible.length - 1){stop(); return;} position++; reached = Math.max(reached,position); render(); schedule(); }, Number($('speed').value)); }
+  function jump(index) { stop(); position = index; reached = Math.max(reached,index); render(); }
+  function bars(container, prediction) {
+    container.replaceChildren();
+    const entries = Object.entries(prediction.scores || {}).sort((a,b) => b[1]-a[1]);
+    const maximum = prediction.score_kind === 'Probability' ? 1 : Math.max(1,...entries.map(([,v])=>v));
+    if(!entries.length){container.append(el('p','No recorded scores for this case.','empty')); return;}
+    entries.forEach(([name, value]) => { const row=el('div',undefined,'probability'); row.append(el('span',name),el('span',prediction.score_kind==='Probability'?percentage(value):String(value),'value')); const track=el('div',undefined,'track'), fill=el('div',undefined,'fill '+schemaClass(name)); fill.style.width=Math.max(0,Math.min(100,value/maximum*100))+'%'; track.append(fill); row.append(track); container.append(row); });
+    container.append(el('p',prediction.score_kind==='Evidence count'?'Evidence counts, scaled to the largest count.':prediction.score_kind==='Approach score'?'Approach scores, not probabilities.':'Choice probability distribution.','footnote'));
+  }
+  function renderTimeline() {
+    $('timeline').replaceChildren();
+    visible.forEach((index,i) => { const item=data.cases[index], s=state(item,item.predictions[active]); const tick=el('button',undefined,'tick '+(s==='abstain'?'differ':s)+(i>reached?' future':'')+(i===position?' current':'')); tick.setAttribute('aria-label','Template '+(i+1)+': '+item.source.product+' · '+statusText[s]); if(i===position) tick.setAttribute('aria-current','step'); tick.title=item.template; tick.onclick=()=>jump(i); $('timeline').append(tick); });
+  }
+  function renderSource(item) {
+    $('vendor').textContent=item.source.vendor || 'Source'; $('product').textContent=item.source.product || item.source.system;
+    $('cluster').textContent=item.id.split(':').pop().replace('cluster-','#').slice(0,12);
+    $('template').replaceChildren();
+    item.template.split(/(<[^<>\n]+>)/g).forEach(part=>$('template').append(el('span',part,/^<[^<>]+>$/.test(part)?'slot-token':undefined)));
+    $('example-count').textContent=item.examples.length+' examples'; $('examples').replaceChildren();
+    item.examples.forEach((text,i) => { const example=el('div',undefined,'example'), meta=el('div',undefined,'example-meta'); meta.append(el('span','EXAMPLE '+String(i+1).padStart(2,'0'))); const ref=item.reference.events[i]; if(ref) meta.append(el('span',ref.reference_schema || ref.reference_state.replaceAll('_',' '),ref.reference_schema?'ref-label':'')); example.append(meta,el('div',text,'example-text')); $('examples').append(example); });
+    $('slots').replaceChildren(); item.slots.forEach(slot=>$('slots').append(el('span',slot.slot_id+' · '+slot.examples.slice(0,3).join(' / '),'chip')));
+    $('slot-details').hidden=!item.slots.length;
+    const classifier=data.classifiers.find(c=>c.id===active);
+    $('evidence-limit').textContent=(classifier.model ? classifier.context==='enriched'?'Jev receives the template and first '+Math.min(3,item.examples.length)+' examples. ':'Jev receives the template only. ':'Frozen source evidence. ')+item.id;
+  }
+  function renderClassifiers(item) {
+    $('classifiers').replaceChildren(); $('classifier-count').textContent=data.classifiers.length+' lanes';
+    data.classifiers.forEach(classifier => {
+      const p=item.predictions[classifier.id], s=state(item,p), total=stats(classifier.id), lane=el('button',undefined,'classifier'+(classifier.id===active?' active':'')); lane.setAttribute('aria-pressed',String(classifier.id===active));
+      const top=el('div',undefined,'lane-top'); top.append(el('span',classifier.label,'lane-title'),el('span',total.matched+' / '+total.eligible+' match','lane-count')); lane.append(top,el('div',classifier.detail,'lane-detail'));
+      const choice=el('div',undefined,'lane-choice'); choice.append(el('span',p?.selected || (p?.status==='tied_top'?'Tied choices':'No selection'),'choice-name'),el('span',statusText[s],'status '+s)); lane.append(choice);
+      const strip=el('div',undefined,'score-strip'), entries=Object.entries(p?.scores || {}), sum=entries.reduce((n,[,v])=>n+v,0); entries.forEach(([name,v])=>{const fill=el('span',undefined,schemaClass(name)); fill.style.width=(sum?v/sum*100:0)+'%'; strip.append(fill);}); lane.append(strip); lane.title=total.available+' / '+total.eligible+' eligible predictions have recorded scores';
+      lane.onclick=()=>{active=classifier.id;render();}; $('classifiers').append(lane);
+    });
+  }
+  function renderDetail(item) {
+    const classifier=data.classifiers.find(c=>c.id===active), p=item.predictions[active] || {scores:{},status:'not_run'}, s=state(item,p);
+    $('active-name').textContent=classifier.label; $('selected-schema').textContent=p.selected || (p.status==='tied_top'?'Tied top choices':'No selection');
+    $('decision-state').replaceChildren(el('span',statusText[s],'status '+s)); if(p.confidence!==undefined) $('decision-state').append(el('span','Confidence '+percentage(p.confidence),'value'));
+    $('reference').replaceChildren(el('div',item.reference.kind,'overline'),el('strong',item.reference.schema || 'Not scored at template level'),el('p',item.reference.schema?'One reference schema across the retained examples.':item.reference.state.replaceAll('_',' ')+' · kept outside the agreement denominator.'));
+    if(item.case_label && item.reference.kind==='Official parser') $('reference').append(el('p','Case label ('+item.case_label.source+'): '+item.case_label.schema));
+    bars($('distribution'),p); $('stage').replaceChildren(); if(p.first_choice){$('stage').append(el('span','Probe stage: '+p.first_choice),el('span','→'),el('strong','Final: '+(p.selected || 'No selection')));}
+    $('probes').replaceChildren(); const probes=p.probes || []; $('probe-title').textContent=probes.length?'Independent semantic questions':'Supporting evidence';
+    const probeNames={primary_Authentication:'Primary authentication event',primary_NetworkSession:'Primary network session',primary_AuditEvent:'Primary audit event',authentication_relationship_change:'Authentication relationship change',communication_lifecycle:'Communication lifecycle'};
+    probes.forEach(probe=>{const row=el('div',undefined,'probe'), label=el('label'); label.append(el('span',probeNames[probe.id] || probe.id),el('span',percentage(probe.value),'value')); const track=el('div',undefined,'track'),fill=el('div',undefined,'fill'); fill.style.width=probe.value*100+'%'; track.append(fill); const details=el('details'); details.append(el('summary','Read the question'),el('p',typeof classifier.questions?.[probe.id]==='string'?classifier.questions[probe.id]:JSON.stringify(classifier.questions?.[probe.id] || {}))); row.append(label,track,details); $('probes').append(row);});
+    if(!probes.length) $('probes').append(el('p',classifier.model?'This configuration recorded a Choice without independent semantic probes.':'This baseline does not produce Jev semantic probes.','empty'));
+    $('criteria').replaceChildren(); Object.entries(classifier.criteria || {}).forEach(([name,value])=>{const row=el('div',undefined,'spec-entry'); row.append(el('strong',name+' · '),el('span',typeof value==='string'?value:JSON.stringify(value))); $('criteria').append(row);}); $('specification').hidden=!classifier.criteria;
+    $('fields').replaceChildren(); (p.fields || []).forEach(field=>$('fields').append(el('div',field.locator+' → '+field.asim_field))); (p.warnings || []).forEach(warning=>$('fields').append(el('p',warning))); $('field-details').hidden=!(p.fields?.length || p.warnings?.length);
+    $('recorded-meta').textContent=classifier.model?'Recorded '+classifier.model+(p.elapsed_seconds!==undefined?' · client round trip '+p.elapsed_seconds.toFixed(3)+' s':'')+' · '+(p.usage?p.usage.input_tokens+' input / '+p.usage.output_tokens+' output tokens':'No token record')+(p.first_choice?' · final-stage tokens; probe stage may be cached.':''):'Imported/local scores · no provider inference during playback.';
+  }
+  function render() {
+    if(!visible.length){$('position').textContent='0 / 0'; $('timeline').replaceChildren(); $('previous').disabled=$('next').disabled=$('play').disabled=true; $('announcement').textContent='No templates match this filter.'; document.querySelector('.workspace').hidden=true; $('visited').textContent='0'; return;}
+    document.querySelector('.workspace').hidden=false; $('play').disabled=false;
+    const item=data.cases[visible[position]];
+    $('position').textContent=String(position+1).padStart(2,'0')+' / '+visible.length;
+    $('previous').disabled=position===0; $('next').disabled=position===visible.length-1; $('visited').textContent=reached+1;
+    renderSource(item); renderClassifiers(item); renderDetail(item); renderTimeline();
+    $('timeline-caption').textContent='Timeline: '+data.classifiers.find(c=>c.id===active).label+' · match / different / unscored';
+    $('announcement').textContent='Template '+(position+1)+' of '+visible.length+': '+item.source.product+'. '+item.template;
+  }
+  $('play').onclick=()=>{if(timer!==null){stop();return;} if(position===visible.length-1){position=0;reached=0;render();} $('play').textContent='Ⅱ Pause'; $('play').setAttribute('aria-pressed','true');schedule();};
+  $('previous').onclick=()=>jump(Math.max(0,position-1)); $('next').onclick=()=>jump(Math.min(visible.length-1,position+1));
+  $('speed').onchange=()=>{if(timer!==null){clearTimeout(timer);schedule();}};
+  $('filter').onchange=()=>{stop(); const mode=$('filter').value; visible=data.cases.map((_,i)=>i).filter(i=>{const item=data.cases[i], ps=Object.values(item.predictions); if(mode==='changed')return new Set(ps.map(p=>p.selected)).size>1; if(mode==='disagree')return item.reference.schema && ps.some(p=>p.selected!==item.reference.schema); if(mode==='unknown')return !item.reference.schema; return true;});position=0;reached=0;render();};
+  document.addEventListener('keydown',event=>{if(['INPUT','SELECT','TEXTAREA','BUTTON','SUMMARY'].includes(event.target.tagName))return; if(event.key==='ArrowRight'){event.preventDefault();$('next').click();} if(event.key==='ArrowLeft'){event.preventDefault();$('previous').click();} if(event.code==='Space'){event.preventDefault();$('play').click();}});
+  $('provenance').append(el('div','Catalogue '+data.catalogue_revision)); if(data.input_sha256)$('provenance').append(el('div','Inputs SHA-256 '+data.input_sha256)); data.files.forEach(file=>$('provenance').append(el('div',file.name+' SHA-256 '+file.sha256)));
+  render();
+})();
+</script>
+</body>
+</html>

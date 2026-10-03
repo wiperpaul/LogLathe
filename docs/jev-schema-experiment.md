@@ -60,6 +60,11 @@ the default build or adding a second annotation workflow.
 
 ## Definitions and evidence
 
+For a visual walkthrough of recorded decisions, use the
+[classifier replay dashboard](schema-replay.md). It presents templates, examples,
+parallel classifier choices, v3 probes, and reference agreement using existing
+reports; playback sends no API requests.
+
 The versioned decision specification, `asim-primary-event-v1`, supplies owned
 summaries of Microsoft's [Authentication definition](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-authentication),
 [Network Session definition](https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-network),
