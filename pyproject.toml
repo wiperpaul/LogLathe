@@ -52,7 +52,7 @@ Issues = "https://github.com/wiperpaul/LogLathe/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-asim_forge = ["mapping_review.html"]
+asim_forge = ["mapping_review.html", "schema_ranking/dashboard.html"]
 
 [tool.ruff]
 line-length = 100

@@ -14,6 +14,7 @@ Choose the guide that matches the work you are doing. The root
 | Public-fixture contributor | [Reference fixture inventory](../evaluation/reference/README.md) | Five source families, pinned inputs/parsers, coverage limitations, and source-family splits |
 | Jev experimenter | [Jev schema experiment](jev-schema-experiment.md) | Offline request previews, explicit live runs, cached replay, decision definitions, and assessment records |
 | Evaluator or approach developer | [Evaluation](evaluation.md) | Registered approaches, metrics, robustness, corpora, and reports |
+| Classifier demonstration | [Replay dashboard](schema-replay.md) | Templates, examples, recorded decisions/probes, and reference agreement |
 | Dataset curator or annotator | [Dataset curation](dataset-curation.md) | Fixture contract, blinded annotation, promotion, grouping, and splits |
 | Contributor or integrator | [Architecture](architecture.md) | Current boundaries, package ownership, and target-neutral seams |
 | Project contributor | [Contributing](../CONTRIBUTING.md) | Development checks, contribution scope, and data-handling rules |
