@@ -3,7 +3,7 @@
 Status: current
 Audience: security and detection engineers running the parser workflow
 Canonical for: build, cluster and mapping review, catalogue sync, compilation, and generated artifacts
-Last verified: 2026-10-03
+Last verified: 2026-10-29
 
 LogLathe's installed command is `asim-forge`. The distribution and CLI retain that
 name for compatibility with existing environments and artifacts.
@@ -130,7 +130,10 @@ layout support, login, navigation, autosave, and `user_state.json`. Source templ
 examples, slots, and the original cluster notes accompany the editable suggestion.
 The separate task directory preserves the completed cluster review. Within each
 mapping item, **Cluster**, **Schema**, and **Mappings** are revisitable tabs, with
-one panel visible at a time. Open **Cluster** to inspect the original Potato evidence tables, change the
+one panel visible at a time. The shared source panel groups read-only vendor/product
+and table/message-column context above a single evidence viewer. Switch between
+**Example** and **Template** without displaying the same event twice. Open
+**Cluster** to reassess that evidence, change the
 cluster decision, and record why. A split, rejection, or request for more evidence
 blocks mapping approval and compilation while retaining mapping edits. Restoring
 cluster approval requires schema confirmation and mapping approval again.
@@ -153,7 +156,13 @@ including edits to shared fields.
 
 New blank mappings default to **Event text span**. Select a mapping in the compact
 list, then select its exact source text in a representative event. NER-style
-highlights show the template's extracted slots and their ASIM labels. A matching
+highlights show extracted values with compact slot/type labels, such as
+`p1 · IPv4`, or the assigned ASIM field. Type hints reuse the deterministic value
+profiler; they describe sampled value shapes, not source roles or ASIM types.
+Mixed values are marked **Mixed**. Hover or focus a highlight to inspect the sample
+count, character-length range, and extractor label. Multiline and variable-length
+values retain their original text and wrap naturally; labels do not enter the
+stored span offsets. A matching
 span assigns that existing slot. Selecting
 verified fixed template text instead opens **Fixed value for this template** and
 retains the selection as evidence. Choose the ASIM output value, for example
@@ -165,8 +174,9 @@ Every selection keeps its ASIM field label. A selection inside part of a slot,
 across slots, or in ambiguously aligned text remains **Extraction rule needed**;
 mark **Needs extraction work** when a new extraction or value translation is
 required. An unchanged value in the examples is not treated as fixed template
-text. Expand **Template and extracted slots** to assign a slot directly when an
-example cannot be selected. Source-table fields and fixed values remain available
+text. Switch to **Template** to assign a slot directly when an example cannot be
+selected. Ambiguous extraction alignment is indicated instead of showing guessed
+boundaries. Source-table fields and fixed values remain available
 from the source dropdown. The selected source span is review evidence, not a new
 extraction rule; a later cluster/extraction change still requires a fresh review
 bundle.
@@ -286,6 +296,37 @@ can attach native parser output and source-table values. These are visible to th
 reviewer but never enter the mapping approach's request. Assisted reviews retain
 their own provenance and are not promoted into independent semantic gold. Use the
 [dataset-curation workflow](dataset-curation.md) for blinded labels.
+
+### Use recorded Jev schema suggestions
+
+To bring an existing [Jev schema-ranking run](jev-schema-experiment.md) into the
+same Potato task, pass its `report.json` when preparing a new bundle:
+
+```console
+uv run asim-forge review prepare artifacts/demo/annotation --catalog artifacts/asim-catalog --setup artifacts/demo/review-setup.json --cluster-reviews artifacts/demo/potato/annotation_output/<reviewer>/user_state.json --schema-report artifacts/jev-run/report.json --output artifacts/demo/mapping-with-jev
+uv run potato start artifacts/demo/mapping-with-jev/potato/config.yaml -p 8000
+```
+
+The report must be a complete live or cached-replay run for the **exact approved
+queue**, using the same catalogue revision and source evidence. Labelled evaluation
+reports, partial runs, and mismatched cases are rejected. Preparation verifies the
+recorded requests and responses; it makes no API calls. The report's identity,
+model, definitions, and probabilities become part of the frozen review evidence.
+Changing the report requires a new bundle and fresh decisions.
+
+The **Schema** tab shows ranked Jev choices with their model probabilities and
+collapsible definitions and provenance. A supported top choice is preselected but
+still needs confirmation. Select another card or use the schema dropdown to
+override it. A tie, Unsupported result, or choice unavailable in setup leaves the
+schema blank; choose a configured schema or use **Defer schema decision**.
+Probabilities describe the model's choice distribution, not measured accuracy.
+
+Jev supplies the schema suggestion only. The existing mapper supplies field
+suggestions, and schema changes retain the same required-field controls and
+separate drafts described above. Cluster approval, schema confirmation, and mapping
+approval remain independent. Omitting `--schema-report` keeps the existing mapper
+suggestions and review behavior; earlier bundles remain readable. These assisted
+reviews are not blinded semantic labels.
 
 ### LLM-assisted critique of attempted mappings
 

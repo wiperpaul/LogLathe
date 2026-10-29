@@ -2,7 +2,7 @@
 
 Status: current
 Canonical for: documentation navigation
-Last verified: 2026-10-03
+Last verified: 2026-10-28
 
 Choose the guide that matches the work you are doing. The root
 [README](../README.md) provides the project overview and shortest runnable example.
@@ -32,8 +32,14 @@ authoritative descriptions of current implementation status.
   evidence-acquisition design and proposed non-LLM ladder.
 - [Span-mapping research](research/span-mapping.md) records extraction boundaries
   and the distinction between selecting evidence and creating an extraction rule.
+- [Microsoft ASIM agent principles](research/asim-agent-principles.md) records
+  source-based reasoning, validation limits, and guidance for future field classification.
+- [Jev operational-state guidance](research/jev-operational-state-guidance.md)
+  records the maintainer-informed v4 definitions; the
+  [completed comparison](research/jev-operational-state-assessment-2026-10-19.md)
+  records development gains, remaining disagreements, and replay evidence.
 - [Expanded Jev assessment](research/jev-expanded-assessment-2026-10-02.md)
-  records the latest frozen Carbon Black Cloud and Cisco ASA comparison. The
+  records the original frozen Carbon Black Cloud and Cisco ASA comparison. The
   [Jev guide](jev-schema-experiment.md) links earlier trials and their limitations.
 - [Field-mapping baseline record](archive/field-mapping-baseline.md) records the
   completed and partially completed baseline implementation sequence.

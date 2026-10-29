@@ -5,6 +5,11 @@ Audience: schema-ranking contributors and reviewers
 Canonical for: AuditEvent boundary research and the opt-in v2 rubric
 Last verified: 2026-10-02
 
+Follow-up, 2026-10-10: Derrick Lee supplied operational-state guidance in the
+user's upstream discussion. The user chose to adopt it as the working policy in
+the new opt-in [v4 specification](jev-operational-state-guidance.md). The findings
+and scores below remain the frozen earlier assessment, not the current policy.
+
 ## Finding and scope
 
 The Meraki disagreement is partly a definition/reference mismatch. Its parser
@@ -16,8 +21,9 @@ valuable compatibility evidence; they do not establish independent correctness.
 
 This is a reason to clarify boundaries and obtain human judgments, not to declare
 the parser creator wrong. Configuration, managed-resource operations, network
-protocol state, and device health can overlap. No upstream issue is opened, and
-the public source messages, reference outputs, and previous scores stay frozen.
+protocol state, and device health can overlap. No upstream issue was opened as
+part of that assessment; the public source messages, reference outputs, and
+previous scores stay frozen.
 
 ## What Jev's own guidance says
 

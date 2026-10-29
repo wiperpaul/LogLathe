@@ -16,6 +16,7 @@ from asim_forge.schema_ranking import jev_client
 from asim_forge.schema_ranking.jev import (
     AUTH_LIFECYCLE_SPEC_VERSION,
     DEFAULT_MODEL,
+    OPERATIONAL_STATE_SPEC_VERSION,
     SCHEMA_DEFINITIONS,
     SPEC_VERSION,
     STRUCTURED_SPEC_VERSION,
@@ -145,14 +146,36 @@ def test_structured_questions_preserve_projection_and_use_matching_probe_definit
     )
 
 
-def test_v1_frozen_example_hash_is_unchanged():
+@pytest.mark.parametrize(
+    ("spec_version", "digest"),
+    [
+        (SPEC_VERSION, "0c83d27fb649fdc71c3e005cc9b59e044d4ecf3272324d0977b58263082cbb20"),
+        (
+            STRUCTURED_SPEC_VERSION,
+            "559e4259d927b88feb3796d4b163f02bd5f99a6d3a085add8c9045fd5e24497b",
+        ),
+        (
+            AUTH_LIFECYCLE_SPEC_VERSION,
+            "4d463a624bf271ff59b6963f610d336fe2462cab82d3f62111eb347c1148dc26",
+        ),
+    ],
+)
+def test_frozen_example_hashes_are_unchanged(spec_version, digest):
     case = load_semantic_mapping_cases(Path("examples/evaluation/semantic-mapping-cases.jsonl"))[0]
-    assert request_hash(build_jev_request(case.input), case.catalogue_revision) == (
-        "0c83d27fb649fdc71c3e005cc9b59e044d4ecf3272324d0977b58263082cbb20"
+    assert (
+        request_hash(
+            build_jev_request(case.input, spec_version=spec_version),
+            case.catalogue_revision,
+            spec_version=spec_version,
+        )
+        == digest
     )
 
 
-@pytest.mark.parametrize("spec_version", [STRUCTURED_SPEC_VERSION, AUTH_LIFECYCLE_SPEC_VERSION])
+@pytest.mark.parametrize(
+    "spec_version",
+    [STRUCTURED_SPEC_VERSION, AUTH_LIFECYCLE_SPEC_VERSION, OPERATIONAL_STATE_SPEC_VERSION],
+)
 def test_opt_in_experiment_cache_and_cli_provenance(tmp_path, source, monkeypatch, spec_version):
     sender = Mock(return_value=JevResponse.model_validate(response_payload()))
     monkeypatch.setattr(jev_client, "send_request", sender)
@@ -205,6 +228,41 @@ def test_opt_in_experiment_cache_and_cli_provenance(tmp_path, source, monkeypatc
         ]
     )
     assert json.loads((output / "report.json").read_text())["spec_version"] == spec_version
+
+
+def test_operational_state_requests_preserve_evidence_and_align_probes(source, tmp_path):
+    old = build_jev_request(source, spec_version=AUTH_LIFECYCLE_SPEC_VERSION)
+    new = build_jev_request(source, spec_version=OPERATIONAL_STATE_SPEC_VERSION, nouls=True)
+    assert new.state == old.state
+    assert new.questions["schema"].instructions == old.questions["schema"].instructions
+    assert (
+        new.questions["schema"].criteria["Authentication"]
+        == (old.questions["schema"].criteria["Authentication"])
+    )
+    assert (
+        new.questions["schema"].criteria["Unsupported"]
+        == (old.questions["schema"].criteria["Unsupported"])
+    )
+    assert "gold-label" not in new.model_dump_json()
+    assert "Meraki" not in json.dumps(new.model_dump()["questions"])
+    assert set(new.questions) == {"schema", *(f"primary_{name}" for name in SCHEMA_DEFINITIONS)}
+    for name in SCHEMA_DEFINITIONS:
+        definition = new.questions["schema"].criteria[name]
+        probe = new.questions[f"primary_{name}"].instructions
+        assert isinstance(definition, str) and isinstance(probe, str)
+        assert definition in probe
+    response = JevResponse.model_validate(response_payload(nouls=True, choice="AuditEvent"))
+    response.validate_for(new)
+    with pytest.raises(ValueError, match="requires --decision-spec"):
+        run_schema_experiment(
+            [SchemaExperimentInput(case_id="unsupported-stage", source=source)],
+            catalogue_revision=REVISION,
+            output=tmp_path / "invalid-stage",
+            cache=tmp_path / "cache",
+            spec_version=OPERATIONAL_STATE_SPEC_VERSION,
+            staged=True,
+        )
+    assert not (tmp_path / "invalid-stage").exists()
 
 
 def test_auth_lifecycle_isolates_boundaries_and_preserves_source_projection(source):

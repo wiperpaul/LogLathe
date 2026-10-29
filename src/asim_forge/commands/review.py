@@ -31,6 +31,11 @@ def register_review_parser(subparsers: argparse._SubParsersAction[argparse.Argum
     prepare.add_argument("--reference-bundle", type=Path)
     prepare.add_argument("--reference-capture", type=Path)
     prepare.add_argument(
+        "--schema-report",
+        type=Path,
+        help="Recorded Jev report.json for this exact queue; imports advice without API calls",
+    )
+    prepare.add_argument(
         "--cluster-reviews",
         type=Path,
         help="Include notes from the queue's original cluster-review state",
@@ -48,6 +53,7 @@ def run_review_command(args: argparse.Namespace) -> None:
         reference_capture=args.reference_capture,
         cluster_reviews=args.cluster_reviews,
         setup=load_mapping_setup(args.setup) if args.setup else None,
+        schema_report=args.schema_report,
     )
     config = (args.output / "potato/config.yaml").resolve()
     print(f"Prepared {manifest.task_count} assisted mapping tasks; no mapping approvals created.")

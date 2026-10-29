@@ -22,9 +22,20 @@ ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 SPEC_VERSION = "asim-primary-event-v1"
 STRUCTURED_SPEC_VERSION = "asim-boundaries-v2"
 AUTH_LIFECYCLE_SPEC_VERSION = "asim-auth-lifecycle-v3"
+OPERATIONAL_STATE_SPEC_VERSION = "asim-operational-state-v4"
 STAGED_POLICY_VERSION = "auth-probes-to-choice-v1"
-DecisionSpec = Literal["asim-primary-event-v1", "asim-boundaries-v2", "asim-auth-lifecycle-v3"]
-SPEC_VERSIONS = (SPEC_VERSION, STRUCTURED_SPEC_VERSION, AUTH_LIFECYCLE_SPEC_VERSION)
+DecisionSpec = Literal[
+    "asim-primary-event-v1",
+    "asim-boundaries-v2",
+    "asim-auth-lifecycle-v3",
+    "asim-operational-state-v4",
+]
+SPEC_VERSIONS = (
+    SPEC_VERSION,
+    STRUCTURED_SPEC_VERSION,
+    AUTH_LIFECYCLE_SPEC_VERSION,
+    OPERATIONAL_STATE_SPEC_VERSION,
+)
 DEFAULT_MODEL = "jev-1.13.0"
 SCHEMA_DEFINITIONS = {
     "Authentication": (
@@ -104,6 +115,39 @@ AUTH_LIFECYCLE_PROBES = {
         "network connection, flow, or tunnel as its primary action? Authentication "
         "attempts and ending an authenticated relationship do not by themselves "
         "establish this. Addresses and ports alone are insufficient."
+    ),
+}
+
+# Adopt the maintainer's operational-state guidance without rewriting frozen specs.
+# Source: https://github.com/Azure/Azure-Sentinel/issues/15249#issuecomment-6049096628
+# Authentication clarification: issuecomment-6049112240 in the same discussion.
+OPERATIONAL_STATE_DEFINITIONS = {
+    "Authentication": AUTH_LIFECYCLE_DEFINITIONS["Authentication"],
+    "NetworkSession": (
+        "The primary event reports network communication with a destination peer: "
+        "a connection, session, flow, traffic permitted or denied, or communication "
+        "establishment and teardown. Identify the destination as the other participant "
+        "in communication, not merely the device whose resource is being changed. "
+        "When a network session ends without an explicit authentication action or "
+        "termination of an authenticated relationship, use NetworkSession rather "
+        "than inferring sign-out. Explicit sign-in, sign-out, authentication failure, "
+        "and deauthentication belong to Authentication. An operation on a managed "
+        "resource or its operational state belongs to AuditEvent; a peer address "
+        "mentioned as context does not by itself change the operation's meaning."
+    ),
+    "AuditEvent": (
+        "The primary event reports an operation or operational state change on a "
+        "managed system or application resource, configuration, setting, or policy. "
+        "Includes creating or deleting a security association as a managed resource, "
+        "changes to interface link state or protocol role, and administrative "
+        "configuration changes. Operational changes may be automatic; a named "
+        "administrator or an explicit configuration edit is not required. Identify "
+        "the affected object and the operation or old/new state from source evidence "
+        "without inventing missing values. Distinguish acting on a resource from "
+        "accessing or communicating with another device through a network session: "
+        "the latter belongs to NetworkSession when a destination communication peer "
+        "is established. Explicit identity authentication belongs to Authentication. "
+        "An audit stream label alone does not establish this schema."
     ),
 }
 
@@ -264,11 +308,10 @@ def build_jev_request(
                 }
             )
         state["parameters"] = parameters
-    definitions = (
-        AUTH_LIFECYCLE_DEFINITIONS
-        if spec_version == AUTH_LIFECYCLE_SPEC_VERSION
-        else SCHEMA_DEFINITIONS
-    )
+    definitions = {
+        AUTH_LIFECYCLE_SPEC_VERSION: AUTH_LIFECYCLE_DEFINITIONS,
+        OPERATIONAL_STATE_SPEC_VERSION: OPERATIONAL_STATE_DEFINITIONS,
+    }.get(spec_version, SCHEMA_DEFINITIONS)
     questions = {
         "schema": JevQuestion(
             type="choice",

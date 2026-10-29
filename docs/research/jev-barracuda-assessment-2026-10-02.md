@@ -5,6 +5,11 @@ Audience: reviewers of the Jev schema experiment
 Canonical for: the frozen Barracuda test trial
 Last verified: 2026-10-02
 
+Follow-up, 2026-10-10: Derrick Lee conditionally supported adding a confirmed
+`SESSION_TIMEOUT` event to Authentication in the user's upstream discussion.
+See [the follow-up interpretation](#maintainer-feedback-2026-10-10). The captured
+native outputs, predictions, and agreement scores below remain unchanged.
+
 ## Assessment
 
 Template-only Jev agreed with the pinned official parser on all ten templates.
@@ -108,6 +113,37 @@ Barracuda has now been inspected. If these results influence definitions, input
 construction, or configuration selection, use a new source for the next untouched
 test. The next useful human contribution remains adjudicating schema-boundary
 examples, with independent decisions kept separate from native-parser agreement.
+
+## Maintainer feedback, 2026-10-10
+
+In [issue 15250](https://github.com/Azure/Azure-Sentinel/issues/15250#issuecomment-6048421972),
+Derrick Lee explained that he lacked detailed Barracuda context and suggested
+adding `SESSION_TIMEOUT` to Authentication if its presence as an EventName in
+actual `barracuda_CL` data is confirmed. This is conditional support for a parser
+change, not a confirmed semantic label or an already merged correction. No
+Microsoft Sentinel parser is changed by this repository work.
+
+The pinned public sample has `EventName_s=SESSION_TIMEOUT` as well as the same
+CEF event name in its raw message, with an administrator and GUI context. That
+supports the proposed authenticated-session interpretation. Actual product data
+remains important: this row's structured `EventMessage_s` says `Service stop`
+while its raw `msg` is empty, and another row has a raw `CONFIG` event but
+structured `EventName_s=SESSION_TIMEOUT`. Do not treat the structured event name
+alone as adjudicated truth for every sample row.
+
+The working Jev policy is semantic: expiry of an authenticated administrator
+relationship belongs to Authentication; timeout of ordinary network communication
+belongs to NetworkSession. Both v3 and the
+[maintainer-informed v4](jev-operational-state-guidance.md#barracuda-session-timeout)
+already include authenticated-session expiry. No vendor-specific event-name
+override is needed, and this feedback does not establish that v4 will select
+Authentication for the frozen template without a new provider assessment.
+
+Neither original Jev view selected Authentication for the timeout: template-only
+selected AuditEvent and enriched selected NetworkSession. The response therefore
+does not validate either original prediction as semantically correct. Keep the
+native AuditEvent reference and frozen agreement scores separate from the proposed
+Authentication interpretation and the maintainer's conditional acceptance.
 
 ## Usage and reproducibility
 
