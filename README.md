@@ -65,6 +65,7 @@ schema per template, and lets the reviewer revisit cluster coherence.
 | Editable mapping defaults and setup-supplied device/time fields | Implemented |
 | Native Kusto reference fixtures and bounded catalogue checks | Implemented across five source families |
 | Optional Jev schema-ranking trials, versioned definitions, and cached replay | Implemented; experimental, outside the default build |
+| Recorded Jev schema suggestions in Potato | Implemented; optional import, explicit reviewer confirmation |
 | LLM-assisted critique of attempted mappings | Documented manual practice |
 | Complete ASIM tester integration and Sentinel execution | Planned |
 | Additional normalization targets such as OCSF | Planned; contributions welcome |
@@ -76,10 +77,15 @@ handoff between the initial cluster task and mapping task, arbitrary extraction
 repair, specialist assignment, and inline native validation remain future work.
 
 Recent work compares frozen Jev schema definitions on public parser samples.
-Clarified authentication definitions improved the latest source-family comparison;
-extra probes and staging gave no additional top-choice gain. These results measure
-agreement with official parsers and retain unresolved semantic disagreements. See
-the [Jev guide](docs/jev-schema-experiment.md) and its dated assessments.
+Clarified authentication definitions improved a source-family comparison; the
+subsequent operational-state definitions improved Meraki agreement in a development
+trial. Extra probes and staging have shown no additional top-choice gain. These
+results measure agreement with official parsers and retain unresolved semantic
+disagreements. See the [Jev guide](docs/jev-schema-experiment.md) and its assessments.
+
+Recorded Jev results can now populate the existing Schema tab with ranked choices
+and their definitions. Reviewers can confirm, override, or defer before reviewing
+fields. See the [offline import instructions](docs/operator-workflow.md#use-recorded-jev-schema-suggestions).
 
 ## Quick start
 
@@ -159,8 +165,9 @@ The repository contains two deliberately different kinds of checked semantic dat
 
 Native parser samples provide a separate `asim-parser-silver` track for functional
 checks and reference-schema agreement. Jev currently considers Authentication,
-NetworkSession, AuditEvent, and Unsupported; its clarified v3 definitions and
-staging are opt-in, and its suggestions do not enter mapping approval automatically.
+NetworkSession, AuditEvent, and Unsupported; its clarified authentication and
+operational-state definitions and v3 staging are opt-in, and its suggestions do
+not enter mapping approval automatically.
 
 These checked data sets and parser comparisons do not support production-quality
 claims. Adjudicated `semantic-gold` evidence, with source-family grouping and locked

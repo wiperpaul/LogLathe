@@ -3,7 +3,7 @@
 Status: current
 Audience: contributors, integrators, and reviewers of architectural changes
 Canonical for: pipeline boundaries, ownership, and design invariants
-Last verified: 2026-10-03
+Last verified: 2026-10-29
 
 LogLathe is a human-in-the-loop workbench for turning security-log evidence into
 reviewable normalization candidates. Its installed Python distribution and command
@@ -80,6 +80,16 @@ mapping approaches. Each immutable task binds source evidence, catalogue,
 prediction, and optional native reference output. Reference answers are joined
 after prediction and stay outside `MappingRequest`.
 
+An optional recorded Jev report supplies schema advice through
+`review prepare --schema-report`. Import verifies the exact unlabelled queue,
+catalogue revision, request evidence, and completed responses using the existing
+replay checks. The suggestion, definitions and report hash participate in the
+immutable task revision. No inference runs during preparation or review. A valid
+top choice initializes the schema draft; ties, Unsupported and unavailable schemas
+leave it unselected. The reviewer must confirm or override it, or defer. Field
+suggestions remain owned by the existing mapper, with separate per-schema drafts.
+Omitting advice preserves earlier task serialization and revision checks.
+
 Source metadata comes from queue setup and is read-only during review. Mapping
 setup pins available schema versions, the `TimeGenerated` policy, optional
 editable mapping defaults, and read-only supplied mappings. One confirmed
@@ -94,7 +104,7 @@ explicit ingestion assumptions appear below the mapping editor with configured
 supplied mappings, separately from missing mappings, without
 weakening the native output conformance checks.
 
-`potato_bundle.py` renders the same source evidence for both review stages. The
+`potato_bundle.py` retains the same source evidence for both review stages. The
 mapping task uses Potato's supported task-layout extension and one structured text
 annotation; Potato owns identity, navigation, saving, and resume. Editable draft
 records are distinct from immutable predictions. Only explicit mapping approval
@@ -102,7 +112,9 @@ allows the existing compiler to generate a candidate. Edits return an approval t
 draft, and mismatched evidence revisions are rejected during compilation.
 
 The mapping item exposes cluster, schema, and field review as revisitable tabs,
-showing one panel at a time.
+showing one panel at a time. A shared evidence viewer switches between an original
+example and its template. Inline type hints reuse the slot profiler; they describe
+observed value shapes, without assigning source roles or changing extraction.
 Its draft can revise cluster coherence using the existing `ReviewStatus` values;
 the adapter carries that decision into the existing `ReviewDecision.status` gate.
 Split, rejected, and insufficient-evidence items cannot compile, even if their
@@ -143,6 +155,13 @@ extraction, and the evaluation harness. This is currently a manual engineering
 practice, not an integrated judge or an automatic approval stage. Its feedback
 retains the same separation from independent annotation and evaluation labels.
 
+Future field classification should carry forward the
+[principles from Microsoft's public ASIM agent](research/asim-agent-principles.md):
+derive source roles independently, constrain targets to the pinned catalogue,
+preserve missing information and per-record behavior, and assess semantic meaning
+separately from executable conformance. These are design guidelines; they do not
+add a provider, repair loop, or change existing approvals.
+
 ## Schema-ranking boundary
 
 `DeepParseClusterer` owns no schema state. Build orchestration creates a
@@ -159,8 +178,9 @@ evidence in an opt-in evaluation path. LogLathe owns its versioned decision
 definitions for Authentication, NetworkSession, AuditEvent, and Unsupported;
 provider probabilities remain separate from lexical evidence counts. Optional
 boundary and authentication-lifecycle probes are experimental configurations.
-Jev is not a field mapper and does not change the build default, mapping approvals,
-or Potato task state. Offline preparation and cached replay require no hosted
+Jev is not a field mapper and does not change the build default or create mapping
+approvals. Recorded results can optionally initialize Potato's Schema tab as
+described above. Offline preparation and cached replay require no hosted
 inference; live requests are explicit and remain outside normal CI.
 
 For compatibility, `clusters.jsonl` still carries a legacy `schema_suggestion`

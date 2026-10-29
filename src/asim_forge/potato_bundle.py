@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, TypedDict
 import yaml
 
 from .models import AsimCatalog, ParameterSlot, ParsedCluster, ReviewTask, SourceEvent
+from .semantic_mapping.profiling import profile_slot
 
 if TYPE_CHECKING:
     from .mapping_review import MappingReviewTask
@@ -326,6 +327,18 @@ def write_mapping_potato_bundle(
                     for schema in (task.setup.schema_versions if task.setup else [])
                 },
                 "catalogue_fields": fields,
+                "slot_profiles": {
+                    slot.slot_id: profile_slot(slot).model_dump(
+                        include={
+                            "physical_type",
+                            "type_confidence",
+                            "sample_count",
+                            "min_length",
+                            "max_length",
+                        }
+                    )
+                    for slot in source.parameter_slots
+                },
                 "example_slot_spans": example_slot_spans(
                     source.template, source.representative_events, source.parameter_slots
                 ),

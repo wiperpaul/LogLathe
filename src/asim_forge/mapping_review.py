@@ -29,6 +29,8 @@ from .models import (
 )
 from .reference.evidence import ReferenceReviewEvidence, reference_review_evidence
 from .reviews import ReviewError, _extract_text, load_potato_annotations, load_review_decisions
+from .schema_ranking.jev_experiment import SchemaExperimentInput
+from .schema_ranking.review import RecordedSchemaSuggestion, load_recorded_schema_suggestions
 from .semantic_annotation.artifacts import load_semantic_annotation_queue
 from .semantic_annotation.contracts import SemanticAnnotationTask
 from .semantic_mapping.approaches import build_approach
@@ -91,6 +93,9 @@ class MappingReviewTask(StrictModel):
     reference: ReferenceReviewEvidence | None = None
     cluster_notes: str = ""
     setup: MappingReviewSetup | None = None
+    schema_suggestion: RecordedSchemaSuggestion | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     review_revision: str
 
     @model_validator(mode="after")
@@ -100,6 +105,8 @@ class MappingReviewTask(StrictModel):
             excluded.add("setup")  # Keep already prepared bundles readable.
         if not self.schema_predictions:
             excluded.add("schema_predictions")  # Keep earlier frozen bundles readable.
+        if self.schema_suggestion is None:
+            excluded.add("schema_suggestion")
         payload = self.model_dump(mode="json", exclude=excluded)
         if self.setup is not None:
             payload["setup"] = _setup_payload(self.setup)
@@ -424,6 +431,10 @@ def _suggested_rows(
 def initial_mapping_draft(task: MappingReviewTask, catalog: AsimCatalog) -> MappingReviewDraft:
     prediction = task.prediction
     schema = prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
+    if task.schema_suggestion is not None:
+        schema = task.schema_suggestion.selected_schema or ""
+        if schema not in get_args(AsimSchema):
+            schema = ""
     if task.setup is not None and schema not in task.setup.schema_versions:
         schema = ""
     suggested_schema = prediction.ranked_schemas[0].schema_name if prediction.ranked_schemas else ""
@@ -463,6 +474,7 @@ def prepare_mapping_review(
     reference_capture: Path | None = None,
     cluster_reviews: Path | None = None,
     setup: MappingReviewSetup | None = None,
+    schema_report: Path | None = None,
 ) -> MappingReviewManifest:
     """Freeze suggestions separately from labels and write an ordinary Potato task."""
     from .potato_bundle import write_mapping_potato_bundle
@@ -519,6 +531,15 @@ def prepare_mapping_review(
         ):
             raise ReviewError("Setup expects a datetime TimeGenerated column in the source table")
     approach = build_approach(approach_name)
+    schema_suggestions = (
+        load_recorded_schema_suggestions(
+            schema_report,
+            [SchemaExperimentInput(case_id=task.case_id, source=task.input) for task in tasks],
+            queue.catalogue_revision,
+        )
+        if schema_report is not None
+        else {}
+    )
     reviews = []
     for task in tasks:
         request = MappingRequest(
@@ -548,6 +569,8 @@ def prepare_mapping_review(
             "cluster_notes": notes.get(task.case_id, ""),
             "setup": _setup_payload(setup),
         }
+        if task.case_id in schema_suggestions:
+            payload["schema_suggestion"] = schema_suggestions[task.case_id].model_dump(mode="json")
         review = MappingReviewTask.model_validate(
             {**payload, "review_revision": _fingerprint(payload)}
         )

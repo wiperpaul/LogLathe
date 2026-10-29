@@ -3,7 +3,7 @@
 Status: experimental; frozen source-family comparisons and offline replay completed, independent semantic quality unestablished
 Audience: schema-ranking contributors and reviewers
 Canonical for: Jev request construction, execution, replay, and evaluation limits
-Last verified: 2026-10-03
+Last verified: 2026-10-28
 
 ## Decision and scope
 
@@ -39,6 +39,13 @@ Black audit templates. Probes and staging gave the same top choices as v3 Choice
 and one SSH internal-error disconnection remained a reference disagreement.
 Clean-checkout offline replay passed. The defaults remain unchanged; these are
 public, unreviewed clusters with parser references, not independently labelled gold.
+
+The [operational-state comparison](research/jev-operational-state-assessment-2026-10-19.md)
+then compared v3 with maintainer-informed v4 on the already inspected source
+families. Agreement rose from 85/102 to 93/102 eligible templates, with eight
+Meraki changes and no other changed public top choices. All 226 public/synthetic
+decisions replayed offline. VPN boundary cases and the synthetic alert error
+remain; this is development evidence and v4 remains opt-in.
 
 Jev is a plausible decision engine at the existing schema-ranking boundary:
 source template evidence goes in, a schema suggestion comes out. LogLathe owns
@@ -93,6 +100,17 @@ improved Authentication agreement from 11/15 to 15/15 templates, but adding
 probes or a second staged Choice gave no additional top-choice gain. The
 synthetic alert control exposed a confident Authentication mistake. Both v3
 and staging remain opt-in development experiments.
+
+The opt-in `--decision-spec asim-operational-state-v4` adopts Derrick Lee's
+maintainer guidance for operational resource changes under AuditEvent, while
+distinguishing communication with a destination peer and explicit authentication.
+It retains v3's Authentication definition and changes AuditEvent/NetworkSession.
+With `--nouls`, it supplies the three matching primary-schema questions; staging
+remains v3-only. The completed development comparison leaves the default and
+previous results unchanged. See the [guidance record](research/jev-operational-state-guidance.md)
+for attribution and working boundaries, and the
+[assessment](research/jev-operational-state-assessment-2026-10-19.md) for results
+and the remaining review cases.
 
 `--context template` sends just the template. The default, `enriched`, adds source
 vendor/product/table/message-column metadata when present, the first three event
@@ -192,6 +210,29 @@ have a 45-second timeout. Other errors stop the batch, save a partial report, an
 return a nonzero exit. Successfully cached requests can be reused on the next
 run. Provider error bodies and credentials are excluded from artifacts. Tests
 mock transport: normal CI needs no Jev key, API calls, or external downloads.
+
+## Template-level reuse and continuous operation
+
+The current experiment classifies templates with bounded example context rather
+than issuing a request for each source event. Live mode reuses matching cached
+requests; the identity includes the supplied evidence, model, decision definition,
+questions, and catalogue revision. Repeated events do not inherently require
+another model call, but changing representative evidence can change that identity.
+
+This supports a possible continuous design: classify new or materially changed
+templates, retain their versioned decisions, and reuse them for matching events.
+That reduces potential inference volume relative to per-event classification.
+It is not an implemented streaming service or a measured production cost saving.
+Cluster coherence and semantic drift must be checked: an unchanged template can
+still conceal events with different meanings.
+
+Observed messages remain useful when vendor documentation or an internal
+application's machine-readable log contract is incomplete. They establish what
+was observed, not every possible message or field. Available documentation can
+add context; insufficient evidence should remain explicit rather than becoming
+invented source semantics. See the
+[Microsoft ASIM agent principles](research/asim-agent-principles.md) for the
+related field-classification guidance and validation boundaries.
 
 ## Evaluate before integrating into review
 
@@ -335,9 +376,15 @@ The current report has per-case outputs and simple schema accuracy; grouped
 uncertainty, calibration curves, cost comparisons, and field accuracy remain
 future evaluation work.
 
-The immediate human contribution is a small blind schema review spanning several
-source families, including ambiguous and out-of-scope events. Compare those
-decisions with Jev only after recording them. If it adds useful evidence, the
-next integration is an advisory schema suggestion in the existing Potato stage,
-followed by the existing schema-scoped mapper. Mapping critique by an LLM remains
-a separate opportunity, described in the [operator guide](operator-workflow.md).
+For independent evaluation, the next human contribution is a small blind schema
+review spanning several source families, including ambiguous and out-of-scope
+events. Compare those decisions with Jev only after recording them.
+
+For assisted engineering, complete unlabelled queue reports can now supply
+advisory schema choices in the existing Potato Schema tab through
+`review prepare --schema-report`. The reviewer confirms, overrides, or defers the
+choice before field review. See the
+[operator instructions](operator-workflow.md#use-recorded-jev-schema-suggestions)
+for the offline import and its evidence checks. These assisted decisions do not
+become independent labels. Mapping critique by an LLM remains a separate manual
+practice, described in the [operator guide](operator-workflow.md).

@@ -3,7 +3,7 @@
 Status: active
 Current milestone: 2 — continuous assisted ASIM review
 Canonical for: remaining and deliberately deferred work
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-28
 
 This roadmap describes what remains to be built. Current behavior and durable
 invariants are documented in [architecture](docs/architecture.md); completed
@@ -52,6 +52,9 @@ Native reference coverage now spans the five source families in the
 [fixture inventory](evaluation/reference/README.md). Jev schema trials have fixed
 definitions, offline previews, request-addressed caches, and replay verification.
 These remain advisory experiments alongside deterministic review and compilation.
+Complete recorded queue runs can now populate the existing Potato Schema tab with
+ranked choices, definitions and provenance. Explicit confirmation, override and
+deferral reuse the existing review controls without new provider calls.
 
 ## Milestone 2 — Continuous assisted ASIM review
 
@@ -66,11 +69,13 @@ The first local OpenSSH cluster review is complete; the newer mixed-source trial
 clusters remain unreviewed.
 
 Prioritize a security engineer's review of concrete schema/mapping disagreements
-and extraction gaps. The [latest Jev assessment](docs/research/jev-expanded-assessment-2026-10-02.md)
-leaves one Cisco ASA SSH internal-error disconnection classified as NetworkSession
-against the parser's Authentication/Logoff reference. Its Success result is also
-a useful mapping question. Record an independent interpretation and rationale
-before changing definitions or treating the parser as a semantic answer key.
+and extraction gaps. The [latest Jev assessment](docs/research/jev-operational-state-assessment-2026-10-19.md)
+improves eight Meraki operational-state choices while leaving VPN boundary cases,
+the Cisco ASA SSH internal-error disconnect, and the synthetic alert-versus-action
+error. Review these and a few changed/agreed controls alongside the new recorded
+suggestions in Potato. Keep the Barracuda timeout's historical reference
+separate from the proposed upstream fix. Record an interpretation and rationale
+before further definition changes or treating a parser as a semantic answer key.
 
 Turn accepted corrections into small development regression cases, and compare a
 reviewed candidate against native output. Continue cluster review where examples
