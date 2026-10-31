@@ -120,7 +120,7 @@ def _parameter_slots(template: str, events: list[SourceEvent]) -> list[Parameter
         match = value_pattern.fullmatch(event.text)
         if match:
             for index, value in enumerate(match.groups()):
-                if value not in slot_values[index]:
+                if len(slot_values[index]) < 5 and value not in slot_values[index]:
                     slot_values[index].append(value)
 
     slots: list[ParameterSlot] = []
@@ -133,7 +133,7 @@ def _parameter_slots(template: str, events: list[SourceEvent]) -> list[Parameter
                 label=label,
                 placeholder=match.group(0),
                 occurrence=counts[label],
-                examples=slot_values[index - 1][:5],
+                examples=slot_values[index - 1],
             )
         )
     return slots
