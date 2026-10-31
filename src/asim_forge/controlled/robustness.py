@@ -98,7 +98,6 @@ def run_robustness(
     for name in names:
         approach = build_approach(name, reference_cases=cases)
         baseline = _predict(approach, cases, catalog)
-        baseline_metrics = evaluate_predictions(cases, baseline)
         baseline_fields = {
             prediction.case_id: predicted_field_set(prediction) for prediction in baseline
         }
@@ -110,6 +109,11 @@ def run_robustness(
                     "the family is unmeasured rather than passing."
                 )
                 continue
+            seed_ids = {_seed_case_id(variant.case.case_id) for variant in variants}
+            baseline_metrics = evaluate_predictions(
+                [case for case in cases if case.case_id in seed_ids],
+                [prediction for prediction in baseline if prediction.case_id in seed_ids],
+            )
             rows.append(
                 _score(
                     approach_name=name,

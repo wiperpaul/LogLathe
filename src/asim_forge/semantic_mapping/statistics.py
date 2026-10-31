@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import random
 from collections.abc import Iterable, Sequence
+from itertools import groupby
 
 from pydantic import Field
 
@@ -258,18 +259,24 @@ def risk_coverage_curve(
 
     points: list[RiskCoveragePoint] = []
     cumulative = 0.0
-    for accepted, (confidence, loss) in enumerate(scored, start=1):
-        cumulative += loss
+    accepted = 0
+    area = 0.0
+    for confidence, group in groupby(scored, key=lambda item: item[0]):
+        losses = [loss for _, loss in group]
+        cumulative += math.fsum(losses)
+        accepted += len(losses)
+        risk = cumulative / accepted
+        area += risk * len(losses) / len(scored)
         points.append(
             RiskCoveragePoint(
                 coverage=round(accepted / len(scored), 6),
-                risk=round(cumulative / accepted, 6),
+                risk=round(risk, 6),
                 confidence_threshold=round(confidence, 6),
             )
         )
     return RiskCoverageCurve(
         points=points,
-        area_under_curve=round(sum(point.risk for point in points) / len(points), 6),
+        area_under_curve=round(area, 6),
         risk_at_full_coverage=points[-1].risk,
     )
 

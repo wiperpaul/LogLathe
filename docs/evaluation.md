@@ -178,6 +178,8 @@ the product of the approach's mean selected-field score and leading schema score
 abstentions rank last. Risk is one minus case-level field F1. Lower risk and lower
 area under the curve are better. These are approach-reported ranking scores, not
 calibrated probabilities, so the curve must not be described as calibration.
+Equal-confidence cases enter together at one threshold. The curve area weights
+each threshold by the fraction of cases it adds.
 
 Report-level warnings identify approaches at or below the best prior's field
 micro-F1, samples with fewer than two independent groups, statistically
@@ -277,7 +279,8 @@ runner rejects those approaches for robustness.
 | Label-changing | Swapped source and destination direction | The prediction moves with the changed labels, field micro-F1 does not fall, and stability is below one. |
 
 Rows report seed and perturbed field micro-F1, delta, prediction stability, and a
-pass/fail verdict. A transformation that applies to no seed case is unmeasured, not
+pass/fail verdict. Each baseline includes only the seed cases that produced variants
+for that transformation. A transformation that applies to no seed case is unmeasured, not
 a pass. Generated variants are synthetic by construction and must never be
 averaged into real-case headline metrics. The corpus benchmark runs these slices
 automatically for each semantic corpus and keeps them in a separate section.
