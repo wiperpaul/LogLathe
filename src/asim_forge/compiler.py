@@ -39,6 +39,8 @@ def compile_reviews(
         decisions = load_mapping_decisions(mapping_bundle, reviews_path)
     _reject_duplicate_reviews(decisions)
     cluster_by_id = {cluster.cluster_id: cluster for cluster in clusters}
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise ReviewError("Use an empty compilation directory to preserve previous outputs")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     compiled: list[ParserSpecification] = []
@@ -63,6 +65,12 @@ def compile_reviews(
             continue
         specification = _to_specification(cluster, decision)
         compiled.append(specification)
+
+    duplicate_names = _duplicates([spec.parser_name.casefold() for spec in compiled])
+    if duplicate_names:
+        raise ReviewError("Parser output names must be unique: " + ", ".join(duplicate_names))
+    programs = [compile_kql(specification) for specification in compiled]
+    for specification, program in zip(compiled, programs, strict=True):
         stem = specification.parser_name
         spec_path = output_dir / f"{stem}.parser-spec.json"
         kql_path = output_dir / f"{stem}.kql"
@@ -70,7 +78,7 @@ def compile_reviews(
             json.dumps(specification.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        kql_path.write_text(compile_kql(specification), encoding="utf-8")
+        kql_path.write_text(program, encoding="utf-8")
         outputs.extend([spec_path.name, kql_path.name])
 
     manifest = CompileManifest(
@@ -131,6 +139,7 @@ def compile_kql(specification: ParserSpecification) -> str:
     temporary_fields = list(aliases.values())
     for name, alias in aliases.items():
         lines.append(f"    | extend {alias} = {name}")
+    # Capture slots before an output mapping can replace the source message.
     for mapping in mappings:
         if mapping.slot_id is not None:
             capture = capture_groups[mapping.slot_id]
@@ -140,6 +149,9 @@ def compile_kql(specification: ParserSpecification) -> str:
                 f'    | extend {expression} = extract(@"{_verbatim(regex)}", '
                 f"{capture}, {source.message_field})"
             )
+    for mapping in mappings:
+        if mapping.slot_id is not None:
+            expression = f"_asim_forge_{mapping.slot_id}"
         elif mapping.source_field is not None:
             expression = aliases[mapping.source_field]
         elif mapping.output_field is not None:

@@ -409,6 +409,10 @@ bundle that the reviewer saw:
 uv run asim-forge compile artifacts/demo/clusters.jsonl artifacts/demo/mapping/potato/annotation_output/<reviewer>/user_state.json --mapping-bundle artifacts/demo/mapping --output artifacts/demo/compiled
 ```
 
+Use a new or empty output directory for each compilation. Existing outputs are
+preserved, and parser names must be unique across approved clusters, ignoring case.
+After changing a decision, choose a new output directory for the revised candidates.
+
 Only explicit mapping approvals generate candidates. Draft, deferred, and
 extraction-needed tasks are counted separately in the compile manifest. Approved
 mappings must have supported target fields, compatible conversions, valid constants,

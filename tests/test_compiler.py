@@ -299,3 +299,58 @@ def test_output_mapping_is_an_exclusive_source(extra_source: dict[str, str | int
 def test_output_mapping_name_must_be_an_identifier() -> None:
     with pytest.raises(ValueError):
         FieldMapping(output_field="EventStartTime | take 1", asim_field="EventEndTime")
+
+
+@pytest.mark.parametrize("second_name", ["vimDemoAuth", "VIMDEMOAUTH"])
+def test_duplicate_parser_names_are_rejected_before_any_output(tmp_path: Path, second_name: str):
+    clusters = tmp_path / "clusters.jsonl"
+    first = _write_cluster(clusters)
+    second = first.model_copy(update={"cluster_id": "cluster-second"})
+    clusters.write_text(first.model_dump_json() + "\n" + second.model_dump_json() + "\n")
+    second_review = _review(second.cluster_id)
+    second_review["parser_name"] = second_name
+    reviews = tmp_path / "reviews.jsonl"
+    reviews.write_text(json.dumps(_review(first.cluster_id)) + "\n" + json.dumps(second_review))
+    output = tmp_path / "compiled"
+
+    with pytest.raises(ReviewError, match="Parser output names must be unique"):
+        compile_reviews(clusters, reviews, output)
+
+    assert list(output.iterdir()) == []
+
+
+def test_recompilation_requires_a_fresh_directory_and_preserves_previous_outputs(tmp_path: Path):
+    clusters = tmp_path / "clusters.jsonl"
+    cluster = _write_cluster(clusters)
+    reviews = tmp_path / "reviews.jsonl"
+    reviews.write_text(json.dumps(_review(cluster.cluster_id)))
+    output = tmp_path / "compiled"
+    compile_reviews(clusters, reviews, output)
+    previous = {path.name: path.read_bytes() for path in output.iterdir()}
+    reviews.write_text(
+        json.dumps({"cluster_id": cluster.cluster_id, "reviewer": "alice", "status": "rejected"})
+    )
+
+    with pytest.raises(ReviewError, match="empty compilation directory"):
+        compile_reviews(clusters, reviews, output)
+
+    assert {path.name: path.read_bytes() for path in output.iterdir()} == previous
+    fresh = tmp_path / "recompiled"
+    assert compile_reviews(clusters, reviews, fresh).compiled_count == 0
+    assert list(fresh.glob("*.kql")) == []
+
+
+def test_all_slots_are_extracted_before_the_message_column_is_overwritten() -> None:
+    specification = _specification(
+        [
+            FieldMapping(constant_value="normalized message", asim_field="EventMessage"),
+            FieldMapping(slot_id="p1", asim_field="EventStartTime", transform="datetime"),
+        ]
+    )
+    specification.source.message_field = "EventMessage"
+
+    kql = compile_kql(specification)
+
+    extraction = kql.index("| extend _asim_forge_p1 = extract(")
+    assert ", 1, EventMessage)" in kql
+    assert extraction < kql.index('EventMessage = tostring("normalized message")')
