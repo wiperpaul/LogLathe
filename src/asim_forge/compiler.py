@@ -18,9 +18,9 @@ from .models import (
     order_field_mappings,
 )
 from .reviews import ReviewError, load_review_decisions
+from .template_matching import literal_pattern, slot_pattern
 
 _PLACEHOLDER = re.compile(r"<VAR:[A-Za-z0-9_]+>")
-_REGEX_META = re.compile(r"([\\.^$|?*+()\[\]{}])")
 
 
 def compile_reviews(
@@ -267,21 +267,21 @@ def _to_specification(
 def _capture_regex(specification: ParserSpecification) -> tuple[str, dict[str, int]]:
     mapped = {mapping.slot_id for mapping in specification.field_mappings}
     matches = list(_PLACEHOLDER.finditer(specification.template))
-    parts = ["^"]
+    parts = [r"^\s*"]
     captures: dict[str, int] = {}
     cursor = 0
     capture_index = 0
     for slot_index, match in enumerate(matches, start=1):
-        parts.append(_regex_literal(specification.template[cursor : match.start()]))
+        parts.append(literal_pattern(specification.template[cursor : match.start()]))
         slot_id = f"p{slot_index}"
         if slot_id in mapped:
             capture_index += 1
             captures[slot_id] = capture_index
-            parts.append("(.+?)")
+            parts.append(f"({slot_pattern(specification.template, match)})")
         else:
             parts.append(".*?")
         cursor = match.end()
-    parts.extend([_regex_literal(specification.template[cursor:]), "$"])
+    parts.extend([literal_pattern(specification.template[cursor:]), r"\s*$"])
     return "".join(parts), captures
 
 
@@ -300,10 +300,6 @@ def _transform(mapping: FieldMapping, temporary: str) -> str:
 def _duplicates(values: list[str]) -> list[str]:
     counts = Counter(values)
     return sorted(value for value, count in counts.items() if count > 1)
-
-
-def _regex_literal(value: str) -> str:
-    return _REGEX_META.sub(r"\\\1", value)
 
 
 def _verbatim(value: str) -> str:

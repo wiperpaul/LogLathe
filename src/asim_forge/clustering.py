@@ -14,6 +14,7 @@ from deepparse.masks_types import Mask
 from deepparse.tokenize import tokenize
 
 from .models import MaskDefinition, ParameterSlot, ParsedCluster, SourceEvent
+from .template_matching import literal_pattern, slot_pattern
 
 DEEPPARSE_REVISION = "b53c29b379be5ab834ff990154297ef8fea8d98a"
 _PLACEHOLDER = re.compile(r"<VAR:([A-Za-z0-9_]+)>")
@@ -140,13 +141,13 @@ def _parameter_slots(template: str, events: list[SourceEvent]) -> list[Parameter
 
 
 def _template_value_pattern(template: str, matches: list[re.Match[str]]) -> re.Pattern[str]:
-    parts: list[str] = []
+    parts = [r"\s*"]
     cursor = 0
     for match in matches:
-        parts.append(re.escape(template[cursor : match.start()]))
-        parts.append("(.+?)")
+        parts.append(literal_pattern(template[cursor : match.start()]))
+        parts.append(f"({slot_pattern(template, match)})")
         cursor = match.end()
-    parts.append(re.escape(template[cursor:]))
+    parts.extend([literal_pattern(template[cursor:]), r"\s*"])
     return re.compile("".join(parts))
 
 

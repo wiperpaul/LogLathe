@@ -93,7 +93,7 @@ def test_compiles_only_approved_review_to_spec_and_kql(tmp_path: Path) -> None:
     assert "TargetUsername = tostring(_asim_forge_p1)" in kql
     assert "SrcIpAddr = tostring(_asim_forge_p2)" in kql
     assert 'EventSchema = "Authentication"' in kql
-    assert r"Login user (.+?) from (.+?)" in kql
+    assert r"Login\s+user\s+(\S(?:.*?\S)?)\s+from\s+(\S(?:.*?\S)?)" in kql
     assert r"Login\ user" not in kql
 
 

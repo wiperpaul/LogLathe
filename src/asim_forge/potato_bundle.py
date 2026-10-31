@@ -12,6 +12,7 @@ import yaml
 
 from .models import AsimCatalog, ParameterSlot, ParsedCluster, ReviewTask, SourceEvent
 from .semantic_mapping.profiling import profile_slot
+from .template_matching import literal_pattern, slot_pattern
 
 if TYPE_CHECKING:
     from .mapping_review import MappingReviewTask
@@ -140,16 +141,18 @@ def _example_template_spans(
         left.end() == right.start() for left, right in zip(matches, matches[1:])
     ):
         return ([[] for _ in representative_events], [[] for _ in representative_events])
-    parts = []
-    greedy_parts = []
+    parts = [r"\s*"]
+    greedy_parts = [r"\s*"]
     cursor = 0
     for index, match in enumerate(matches):
-        literal = re.escape(template[cursor : match.start()])
-        parts.extend([literal, f"(?P<slot_{index}>.+?)"])
-        greedy_parts.extend([literal, f"(?P<slot_{index}>.+)"])
+        literal = literal_pattern(template[cursor : match.start()])
+        parts.extend([literal, f"(?P<slot_{index}>{slot_pattern(template, match)})"])
+        greedy_parts.extend(
+            [literal, f"(?P<slot_{index}>{slot_pattern(template, match, greedy=True)})"]
+        )
         cursor = match.end()
-    parts.append(re.escape(template[cursor:]))
-    greedy_parts.append(re.escape(template[cursor:]))
+    parts.extend([literal_pattern(template[cursor:]), r"\s*"])
+    greedy_parts.extend([literal_pattern(template[cursor:]), r"\s*"])
     pattern = re.compile("".join(parts), re.DOTALL)
     greedy_pattern = re.compile("".join(greedy_parts), re.DOTALL)
     slot_results: list[list[SlotSpan]] = []

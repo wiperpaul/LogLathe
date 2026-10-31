@@ -203,6 +203,11 @@ byte-order marks, normalizes a bounded source vocabulary, and retains nearby
 CEF/JSON-style keys as mapping context. Explicit structure-preserving adapters for
 JSON, CEF/LEEF, syslog, key/value records, and multiline events remain future work.
 
+Template matching accepts tabs and repeated or outer whitespace without changing
+the original events. Extraction, review spans, and generated KQL share the same
+matching rules; captured values retain internal whitespace and span offsets refer
+to the original text.
+
 Those adapters must preserve the original record, decoded structure,
 transformations, and provenance. Target field names must not feed back into source
 clustering or physical type detection.
