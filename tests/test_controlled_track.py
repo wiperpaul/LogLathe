@@ -202,3 +202,33 @@ def test_surface_only_changes_do_not_move_the_answer() -> None:
 def test_robustness_rejects_an_empty_seed_set() -> None:
     with pytest.raises(RobustnessError, match="At least one seed case"):
         run_robustness([], build_catalog())
+
+
+def test_robustness_baseline_only_includes_cases_the_transformation_can_change() -> None:
+    seed = _seed()
+    uppercase = seed.model_dump(mode="json")
+    uppercase["case_id"] = "already-uppercase"
+    uppercase["input"]["template"] = "NETWORK SOURCE ADDRESS <VAR:IPV4>"
+    uppercase["input"]["representative_events"] = [
+        {"source_file": "test.log", "line_number": 1, "text": "NETWORK SOURCE ADDRESS 10.0.0.1"}
+    ]
+    uppercase["input"]["parameter_slots"] = uppercase["input"]["parameter_slots"][:1]
+    uppercase["expected"]["source_semantics"] = uppercase["expected"]["source_semantics"][:1]
+    semantic_id = uppercase["expected"]["source_semantics"][0]["semantic_id"]
+    uppercase["expected"]["asim_fields"] = [
+        field
+        for field in uppercase["expected"]["asim_fields"]
+        if field["semantic_id"] == semantic_id
+    ]
+    extra = SemanticMappingCase.model_validate(uppercase)
+    catalog = build_catalog()
+
+    def uppercase_result(cases):
+        report = run_robustness(cases, catalog, ["direct-lexical"])
+        return next(row for row in report.rows if row.perturbation == "uppercase")
+
+    original = uppercase_result([seed])
+    mixed = uppercase_result([seed, extra])
+
+    assert original.passed
+    assert mixed == original

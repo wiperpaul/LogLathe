@@ -195,7 +195,7 @@ def test_risk_coverage_curve_falls_as_abstention_rises() -> None:
 
     curve = risk_coverage_curve(cases, mixed)
 
-    assert len(curve.points) == len(cases)
+    assert len(curve.points) == 2
     assert curve.points[-1].coverage == 1.0
     # Abstaining approaches score zero confidence, so they are rejected first.
     assert curve.points[0].risk < curve.risk_at_full_coverage
@@ -211,3 +211,43 @@ def test_risk_coverage_curve_is_flat_when_every_case_is_correct() -> None:
 
     assert curve.area_under_curve == 0.0
     assert curve.risk_at_full_coverage == 0.0
+
+
+def test_equal_confidence_cases_share_one_threshold_and_ignore_input_order() -> None:
+    cases = _family_cases(2)
+    predictions = _predict("semantic-frame", cases, build_catalog())
+    predictions[1] = predictions[1].model_copy(
+        update={
+            "asim_fields": [
+                field.model_copy(
+                    update={
+                        "asim_field": f"Wrong{index}",
+                        "ranked_candidates": [
+                            field.ranked_candidates[0].model_copy(
+                                update={"asim_field": f"Wrong{index}"}
+                            )
+                        ],
+                    }
+                )
+                for index, field in enumerate(predictions[1].asim_fields)
+            ]
+        }
+    )
+
+    curve = risk_coverage_curve(cases, predictions)
+
+    assert curve == risk_coverage_curve(cases[::-1], predictions[::-1])
+    assert len(curve.points) == 1
+    assert curve.points[0].coverage == 1.0
+    assert curve.area_under_curve == curve.risk_at_full_coverage == 0.5
+
+
+def test_curve_area_weights_thresholds_by_the_number_of_accepted_cases() -> None:
+    cases = _family_cases(3)
+    strong = _predict("semantic-frame", cases, build_catalog())
+    weak = _predict("null-prior", cases, build_catalog())
+
+    curve = risk_coverage_curve(cases, [strong[0], weak[1], weak[2]])
+
+    assert len(curve.points) == 2
+    assert curve.area_under_curve == pytest.approx(4 / 9, abs=1e-6)
