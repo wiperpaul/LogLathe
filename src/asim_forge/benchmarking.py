@@ -9,6 +9,7 @@ import json
 import tarfile
 import tempfile
 from collections import Counter
+from dataclasses import dataclass
 from math import comb
 from pathlib import Path
 from time import sleep
@@ -27,7 +28,7 @@ from .evaluation_splits import (
     validate_semantic_case_groups,
 )
 from .ingestion import read_events
-from .models import AsimCatalog, StrictModel
+from .models import AsimCatalog, ParsedCluster, StrictModel
 from .redistribution import DESCRIPTIONS as REDISTRIBUTION_DESCRIPTIONS
 from .redistribution import RedistributionClass, require_publishable, strictest
 from .schema_ranking import rank_clusters
@@ -274,152 +275,15 @@ def run_benchmarks(
             )
         )
         if manifest.track in SEMANTIC_TRACKS:
-            assert catalog is not None and manifest.cases is not None
-            cases = load_semantic_mapping_cases(_relative_file(path, manifest.cases))
-            if manifest.split is None:
-                comparison = compare_approaches(cases, catalog)
-            else:
-                assert manifest.case_groups is not None and manifest.promotion_manifest is not None
-                split = load_semantic_dataset_split(_relative_file(path, manifest.split))
-                groups = validate_semantic_promotion_artifacts(
-                    _relative_file(path, manifest.cases),
-                    _relative_file(path, manifest.case_groups),
-                    _relative_file(path, manifest.promotion_manifest),
-                )
-                validate_semantic_case_groups(cases, split, groups)
-                comparison = compare_split_approaches(
-                    cases,
-                    catalog,
-                    split,
-                    manifest.evaluation_partition or "test",
-                )
-            for evaluation in comparison.approaches:
-                metrics = evaluation.metrics.model_dump(mode="json")
-                interval = next(
-                    (item for item in evaluation.intervals if item.metric == "field_micro_f1"),
-                    None,
-                )
-                results.append(
-                    BenchmarkRow(
-                        corpus_id=manifest.corpus_id,
-                        track=manifest.track,
-                        approach=evaluation.approach.name,
-                        item_count=comparison.case_count,
-                        metrics=metrics,
-                        primary_metric="field_micro_f1",
-                        primary_metric_low=interval.lower if interval is not None else None,
-                        primary_metric_high=interval.upper if interval is not None else None,
-                        split_id=comparison.split_id,
-                        evaluation_partition=comparison.evaluation_partition,
-                        reference_item_count=(
-                            comparison.reference_case_count
-                            if comparison.split_id is not None
-                            else None
-                        ),
-                    )
-                )
-                warnings.extend(
-                    f"{manifest.corpus_id}/{evaluation.approach.name}: {warning}"
-                    for warning in evaluation.warnings
-                )
-            warnings.extend(f"{manifest.corpus_id}: {warning}" for warning in comparison.warnings)
-            if comparison.sample is not None:
-                sample_resolution.append(
-                    SampleResolution(
-                        corpus_id=manifest.corpus_id,
-                        case_count=comparison.sample.case_count,
-                        group_count=comparison.sample.group_count,
-                        grouping=comparison.sample.grouping,
-                        minimum_detectable_effect=comparison.sample.minimum_detectable_effect,
-                    )
-                )
-            corpus_robustness, robustness_warnings = _controlled_robustness(
-                manifest.corpus_id, cases, catalog
-            )
-            robustness.extend(corpus_robustness)
-            warnings.extend(robustness_warnings)
-            continue
-
-        with tempfile.TemporaryDirectory(prefix="asim-forge-benchmark-") as temporary:
-            staged = Path(temporary)
-            resource_paths = {
-                resource.role: _stage_resource(
-                    resource, cache, staged, manifest.max_events, source_dir=path.parent
-                )
-                for resource in manifest.resources
-            }
-            events, _ = read_events(staged / "input")
-            clustering = DeepParseClusterer(
-                system=manifest.system,
-                sample_size=manifest.sample_size,
-                samples_per_cluster=manifest.samples_per_cluster,
-            ).cluster(events)
-            result_approach = "deepparse-default"
-            if manifest.track == "parsing-gold":
-                gold = _read_gold(resource_paths["gold"], manifest.gold_column or "")
-                if len(gold) != len(clustering.assignments):
-                    raise BenchmarkError(
-                        f"{manifest.corpus_id}: {len(gold)} gold rows do not match "
-                        f"{len(clustering.assignments)} input events"
-                    )
-                metrics = parsing_metrics(clustering.assignments, gold)
-                primary = "pair_f1"
-            elif manifest.track == "schema-hint":
-                assert manifest.schema_hint is not None
-                ranking = rank_clusters(clustering.clusters)
-                ranked_clusters = ranking.clusters
-                matching_clusters = sum(
-                    cluster.schema_suggestion.schema_name == manifest.schema_hint
-                    for cluster in ranked_clusters
-                )
-                matching_events = sum(
-                    cluster.event_count
-                    for cluster in ranked_clusters
-                    if cluster.schema_suggestion.schema_name == manifest.schema_hint
-                )
-                fit_events = sum(
-                    cluster.event_count
-                    for cluster in ranked_clusters
-                    if cluster.schema_suggestion.schema_name != "NoFit"
-                )
-                metrics = {
-                    "cluster_count": len(ranked_clusters),
-                    "provisional_asim_fit_event_rate": round(fit_events / len(events), 6),
-                    "schema_hint_cluster_agreement": round(
-                        matching_clusters / len(ranked_clusters), 6
-                    ),
-                    "schema_hint_event_agreement": round(matching_events / len(events), 6),
-                }
-                primary = "schema_hint_event_agreement"
-                identity = ranking.predictions[0].approach
-                result_approach = f"{identity.name}-v{identity.version}"
-            else:
-                ranking = rank_clusters(clustering.clusters)
-                ranked_clusters = ranking.clusters
-                slot_clusters = sum(bool(cluster.parameter_slots) for cluster in ranked_clusters)
-                fit_events = sum(
-                    cluster.event_count
-                    for cluster in ranked_clusters
-                    if cluster.schema_suggestion.schema_name != "NoFit"
-                )
-                metrics = {
-                    "cluster_count": len(ranked_clusters),
-                    "slot_cluster_rate": round(slot_clusters / len(ranked_clusters), 6),
-                    "provisional_asim_fit_event_rate": round(fit_events / len(events), 6),
-                }
-                primary = "provisional_asim_fit_event_rate"
-                identity = ranking.predictions[0].approach
-                result_approach = f"{identity.name}-v{identity.version}"
-            results.append(
-                BenchmarkRow(
-                    corpus_id=manifest.corpus_id,
-                    track=manifest.track,
-                    approach=result_approach,
-                    item_count=len(events),
-                    metrics=metrics,
-                    primary_metric=primary,
-                )
-            )
+            assert catalog is not None
+            semantic = _run_semantic_corpus(path, manifest, catalog)
+            results.extend(semantic.rows)
+            warnings.extend(semantic.warnings)
+            if semantic.sample_resolution is not None:
+                sample_resolution.append(semantic.sample_resolution)
+            robustness.extend(semantic.robustness)
+        else:
+            results.append(_run_log_corpus(path, manifest, cache))
 
     report = BenchmarkReport(
         revision=revision,
@@ -442,6 +306,169 @@ def run_benchmarks(
         report = _apply_baseline(report, _load_report(baseline_path))
     write_benchmark_report(output_dir, report)
     return report
+
+
+@dataclass(frozen=True)
+class _SemanticCorpusResult:
+    rows: list[BenchmarkRow]
+    warnings: list[str]
+    sample_resolution: SampleResolution | None
+    robustness: list[RobustnessSummary]
+
+
+def _run_semantic_corpus(
+    path: Path, manifest: CorpusManifest, catalog: AsimCatalog
+) -> _SemanticCorpusResult:
+    """Compare mapping approaches on one semantic corpus, then run its controlled checks."""
+    assert manifest.cases is not None
+    cases = load_semantic_mapping_cases(_relative_file(path, manifest.cases))
+    if manifest.split is None:
+        comparison = compare_approaches(cases, catalog)
+    else:
+        assert manifest.case_groups is not None and manifest.promotion_manifest is not None
+        split = load_semantic_dataset_split(_relative_file(path, manifest.split))
+        groups = validate_semantic_promotion_artifacts(
+            _relative_file(path, manifest.cases),
+            _relative_file(path, manifest.case_groups),
+            _relative_file(path, manifest.promotion_manifest),
+        )
+        validate_semantic_case_groups(cases, split, groups)
+        comparison = compare_split_approaches(
+            cases,
+            catalog,
+            split,
+            manifest.evaluation_partition or "test",
+        )
+    rows: list[BenchmarkRow] = []
+    warnings: list[str] = []
+    for evaluation in comparison.approaches:
+        metrics = evaluation.metrics.model_dump(mode="json")
+        interval = next(
+            (item for item in evaluation.intervals if item.metric == "field_micro_f1"),
+            None,
+        )
+        rows.append(
+            BenchmarkRow(
+                corpus_id=manifest.corpus_id,
+                track=manifest.track,
+                approach=evaluation.approach.name,
+                item_count=comparison.case_count,
+                metrics=metrics,
+                primary_metric="field_micro_f1",
+                primary_metric_low=interval.lower if interval is not None else None,
+                primary_metric_high=interval.upper if interval is not None else None,
+                split_id=comparison.split_id,
+                evaluation_partition=comparison.evaluation_partition,
+                reference_item_count=(
+                    comparison.reference_case_count if comparison.split_id is not None else None
+                ),
+            )
+        )
+        warnings.extend(
+            f"{manifest.corpus_id}/{evaluation.approach.name}: {warning}"
+            for warning in evaluation.warnings
+        )
+    warnings.extend(f"{manifest.corpus_id}: {warning}" for warning in comparison.warnings)
+    sample_resolution = (
+        SampleResolution(
+            corpus_id=manifest.corpus_id,
+            case_count=comparison.sample.case_count,
+            group_count=comparison.sample.group_count,
+            grouping=comparison.sample.grouping,
+            minimum_detectable_effect=comparison.sample.minimum_detectable_effect,
+        )
+        if comparison.sample is not None
+        else None
+    )
+    robustness, robustness_warnings = _controlled_robustness(manifest.corpus_id, cases, catalog)
+    return _SemanticCorpusResult(
+        rows=rows,
+        warnings=[*warnings, *robustness_warnings],
+        sample_resolution=sample_resolution,
+        robustness=robustness,
+    )
+
+
+def _run_log_corpus(path: Path, manifest: CorpusManifest, cache: Path) -> BenchmarkRow:
+    """Cluster one staged log corpus with DeepParse and score it for its track."""
+    with tempfile.TemporaryDirectory(prefix="asim-forge-benchmark-") as temporary:
+        staged = Path(temporary)
+        resource_paths = {
+            resource.role: _stage_resource(
+                resource, cache, staged, manifest.max_events, source_dir=path.parent
+            )
+            for resource in manifest.resources
+        }
+        events, _ = read_events(staged / "input")
+        clustering = DeepParseClusterer(
+            system=manifest.system,
+            sample_size=manifest.sample_size,
+            samples_per_cluster=manifest.samples_per_cluster,
+        ).cluster(events)
+        if manifest.track == "parsing-gold":
+            gold = _read_gold(resource_paths["gold"], manifest.gold_column or "")
+            if len(gold) != len(clustering.assignments):
+                raise BenchmarkError(
+                    f"{manifest.corpus_id}: {len(gold)} gold rows do not match "
+                    f"{len(clustering.assignments)} input events"
+                )
+            approach = "deepparse-default"
+            metrics = parsing_metrics(clustering.assignments, gold)
+            primary = "pair_f1"
+        else:
+            approach, metrics, primary = _schema_fit_metrics(
+                manifest, clustering.clusters, len(events)
+            )
+        return BenchmarkRow(
+            corpus_id=manifest.corpus_id,
+            track=manifest.track,
+            approach=approach,
+            item_count=len(events),
+            metrics=metrics,
+            primary_metric=primary,
+        )
+
+
+def _schema_fit_metrics(
+    manifest: CorpusManifest, clusters: list[ParsedCluster], event_count: int
+) -> tuple[str, dict[str, float | int], str]:
+    """Provisional ASIM fit of ranked clusters, plus agreement with a corpus schema hint."""
+    ranking = rank_clusters(clusters)
+    ranked_clusters = ranking.clusters
+    fit_events = sum(
+        cluster.event_count
+        for cluster in ranked_clusters
+        if cluster.schema_suggestion.schema_name != "NoFit"
+    )
+    metrics: dict[str, float | int]
+    if manifest.track == "schema-hint":
+        assert manifest.schema_hint is not None
+        matching_clusters = sum(
+            cluster.schema_suggestion.schema_name == manifest.schema_hint
+            for cluster in ranked_clusters
+        )
+        matching_events = sum(
+            cluster.event_count
+            for cluster in ranked_clusters
+            if cluster.schema_suggestion.schema_name == manifest.schema_hint
+        )
+        metrics = {
+            "cluster_count": len(ranked_clusters),
+            "provisional_asim_fit_event_rate": round(fit_events / event_count, 6),
+            "schema_hint_cluster_agreement": round(matching_clusters / len(ranked_clusters), 6),
+            "schema_hint_event_agreement": round(matching_events / event_count, 6),
+        }
+        primary = "schema_hint_event_agreement"
+    else:
+        slot_clusters = sum(bool(cluster.parameter_slots) for cluster in ranked_clusters)
+        metrics = {
+            "cluster_count": len(ranked_clusters),
+            "slot_cluster_rate": round(slot_clusters / len(ranked_clusters), 6),
+            "provisional_asim_fit_event_rate": round(fit_events / event_count, 6),
+        }
+        primary = "provisional_asim_fit_event_rate"
+    identity = ranking.predictions[0].approach
+    return f"{identity.name}-v{identity.version}", metrics, primary
 
 
 def parsing_metrics(predicted: list[int], gold: list[str]) -> dict[str, float | int]:
