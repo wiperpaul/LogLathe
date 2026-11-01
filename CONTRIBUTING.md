@@ -27,6 +27,18 @@ uv run pre-commit run --all-files
 
 GitHub Actions runs quality checks and tests on Python 3.11, 3.12, 3.13, and 3.14.
 
+### Editor setup
+
+[ty](https://docs.astral.sh/ty/) is the project's only type checker; its scope is
+configured in `[tool.ty]` in `pyproject.toml`. In VS Code, install the
+[ty](https://marketplace.visualstudio.com/items?itemName=astral-sh.ty) and
+[Ruff](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff)
+extensions. The ty extension disables the Python extension's language server by
+default; if your user settings select one explicitly, set
+`"python.languageServer": "None"` in the workspace settings so that editor
+diagnostics match `uv run ty check`. The `.vscode/` directory is ignored, so
+workspace settings stay local.
+
 ## Pull requests
 
 Keep each pull request focused on one purpose and use a title that states the
