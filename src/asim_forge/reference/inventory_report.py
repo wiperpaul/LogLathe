@@ -99,6 +99,8 @@ def render_inventory(inventory: AsimInventory) -> str:
             blocker_text = ", ".join(
                 f"{blocker} ({', '.join(pairing.missing_tables)})"
                 if blocker == "missing-tables"
+                else f"{blocker} ({_first(sample.type_violations)})"
+                if blocker == "type-violations"
                 else blocker
                 for blocker in pairing.blockers
             )
@@ -247,6 +249,11 @@ def render_inventory(inventory: AsimInventory) -> str:
 
 def _short(path: str) -> str:
     return path.removeprefix(f"{SAMPLE_ROOT}/")
+
+
+def _first(names: list[str], limit: int = 3) -> str:
+    shown = ", ".join(names[:limit])
+    return f"{shown}, +{len(names) - limit} more" if len(names) > limit else shown
 
 
 def _row(*cells: str) -> str:

@@ -49,8 +49,9 @@ Blocker = Literal[
     "source-setup",
     "missing-tables",
     "column-types",
+    "type-violations",
 ]
-EXCLUDING_BLOCKERS = frozenset({"normalized-input", "duplicate-sample"})
+EXCLUDING_BLOCKERS = frozenset({"normalized-input", "duplicate-sample", "type-violations"})
 
 
 class UpstreamFile(StrictModel):
@@ -88,6 +89,7 @@ class SampleRecord(StrictModel):
     leaked_fields: dict[str, float]
     table_name_hints: list[str]
     table_schema_files: list[str]
+    type_violations: list[str] = Field(default_factory=list)
     device_identities: list[tuple[str, str]]
     duplicate_of: str | None = None
     duplicate_similarity: float | None = None
@@ -227,6 +229,7 @@ class _Builder:
         self.paths: set[str] = set()
         self.samples: list[_Sample] = []
         self.table_schemas: list[TableSchemaFile] = []
+        self.table_types: dict[str, dict[str, str]] = {}
         self.parsers: list[tuple[ParserRecord, static.ParserFacts]] = []
         self.testers: list[TesterResult] = []
         self.skipped: list[SkippedFile] = []
@@ -291,6 +294,7 @@ class _Builder:
         if schema is not None:
             # Files such as CommonSecurityLog_NetworkSession.csv name the table, then the schema.
             table = re.sub(rf"_(?:asim|vim)?{re.escape(schema)}$", "", table, flags=re.I)
+        self.table_types[entry.path] = columns
         self.table_schemas.append(
             TableSchemaFile(file=_upstream_file(entry, sha256), table=table, columns=len(columns))
         )
@@ -488,6 +492,9 @@ class _Builder:
             },
             table_name_hints=static.table_name_hints(tables),
             table_schema_files=sorted(covering),
+            type_violations=static.type_violations(
+                profile, [self.table_types[path] for path in sorted(covering)]
+            ),
             device_identities=list(profile.device_identities),
             duplicate_of=duplicate[0] if duplicate else None,
             duplicate_similarity=duplicate[1] if duplicate else None,
@@ -672,6 +679,8 @@ def _pairings(
                 any(_covers(item.table, table) for item in table_schemas) for table in tables
             ):
                 blockers.append("column-types")
+            if record.type_violations:
+                blockers.append("type-violations")
             status: Literal["ready", "needs-setup", "excluded"] = (
                 "excluded"
                 if EXCLUDING_BLOCKERS.intersection(blockers)

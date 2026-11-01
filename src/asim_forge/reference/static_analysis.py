@@ -11,9 +11,10 @@ import csv
 import hashlib
 import io
 import json
+import math
 import re
 from collections import Counter
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -56,6 +57,39 @@ VOLATILE_COLUMNS = frozenset(
     }
 )
 TABLE_NAME_HINTS = ("auth", "login", "logon", "signin", "audit", "network", "flow", "session")
+
+
+def _is_integer(cell: str) -> bool:
+    try:
+        int(cell)
+    except ValueError:
+        return False
+    return True
+
+
+def _is_real(cell: str) -> bool:
+    try:
+        return math.isfinite(float(cell))
+    except ValueError:
+        return False
+
+
+# Cell checks mirror reference-fixture loading, so a violation means the sample cannot
+# load as its declared table. Types outside these families are not checked.
+_CELL_CHECKS: dict[str, Callable[[str], bool]] = {
+    "integer": _is_integer,
+    "real": _is_real,
+    "boolean": lambda cell: cell.strip().casefold() in ("true", "false"),
+}
+_TYPE_FAMILIES = {
+    "int": "integer",
+    "long": "integer",
+    "real": "real",
+    "double": "real",
+    "decimal": "real",
+    "bool": "boolean",
+    "boolean": "boolean",
+}
 
 _LEXICAL = re.compile(
     r"(?P<comment>//[^\n]*)"
@@ -112,6 +146,8 @@ class CsvProfile:
     device_identities: tuple[tuple[str, str], ...]
     fingerprint_columns: tuple[str, ...]
     fingerprints: Counter[str]
+    # Columns with a populated cell that fails each typed check, keyed by type family.
+    unparsed: dict[str, frozenset[str]]
 
 
 @dataclass(frozen=True)
@@ -233,6 +269,14 @@ def profile_csv(content: bytes) -> CsvProfile:
         device_identities=tuple(sorted(identities)),
         fingerprint_columns=tuple(name for name, _ in kept),
         fingerprints=fingerprints,
+        unparsed={
+            family: frozenset(
+                name
+                for name, index in position.items()
+                if any(row[index].strip() and not check(row[index]) for row in values)
+            )
+            for family, check in _CELL_CHECKS.items()
+        },
     )
 
 
@@ -267,6 +311,20 @@ def table_schema_columns(content: bytes) -> dict[str, str]:
             for row in reader
             if (row["ColumnName"] or "").strip()
         }
+
+
+def type_violations(profile: CsvProfile, schemas: Sequence[Mapping[str, str]]) -> list[str]:
+    """Sample columns whose cells cannot load as the type every covering schema declares."""
+    violations = []
+    for name in profile.columns:
+        families = [
+            _TYPE_FAMILIES.get(types[name].casefold()) for types in schemas if name in types
+        ]
+        if families and all(
+            family is not None and name in profile.unparsed[family] for family in families
+        ):
+            violations.append(name)
+    return violations
 
 
 def raw_event_count(path: str, content: bytes) -> int:

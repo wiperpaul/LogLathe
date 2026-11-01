@@ -491,6 +491,44 @@ def test_inventory_reads_sample_directory_column_exports_as_table_schemas(tmp_pa
     assert tailspin.blockers == ["unsupported-parameters"]
 
 
+def test_inventory_excludes_samples_whose_cells_violate_declared_types(tmp_path: Path) -> None:
+    sample = f"{_SAMPLES}/VPN_Authentication_IngestedLogs.csv"
+    export = f"{_SAMPLES}/CommonSecurityLog_Authentication.csv"
+    files = {
+        **_FILES,
+        sample: _csv(
+            "Type,DeviceVendor,DeviceProduct,SourceUserName,SentBytes,DeviceCustomNumber1",
+            "CommonSecurityLog,Tailspin,Toys VPN,frank,test,7",
+            "CommonSecurityLog,Tailspin,Toys VPN,grace,,8",
+        ),
+        export: _csv(
+            "ColumnName,ColumnType",
+            "SourceUserName,string",
+            "SentBytes,long",
+            "DeviceCustomNumber1,int",
+        ),
+    }
+
+    inventory = _build(tmp_path, FakeUpstream(files))
+
+    record = next(item for item in inventory.samples if item.file.path == sample)
+    assert record.type_violations == ["SentBytes"]
+    tailspin = next(p for p in inventory.pairings if p.parser == "ASimAuthenticationTailspinVPN")
+    assert (tailspin.status, tailspin.blockers) == (
+        "excluded",
+        ["unsupported-parameters", "type-violations"],
+    )
+    assert "unsupported-parameters, type-violations (SentBytes)" in render_inventory(inventory)
+
+    # A column is only a violation when every covering schema types it strictly.
+    files[f"{_SAMPLES}/CommonSecurityLog_Schema.csv"] = _csv(
+        "ColumnName,ColumnType", "SentBytes,string"
+    )
+    inventory = _build(tmp_path / "lenient", FakeUpstream(files))
+    record = next(item for item in inventory.samples if item.file.path == sample)
+    assert record.type_violations == []
+
+
 def test_inventory_rejects_invalid_schema_names(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="ASIM schema names"):
         build_inventory(
@@ -568,6 +606,32 @@ def test_table_schema_columns_accepts_both_upstream_layouts() -> None:
     }
     with pytest.raises(ValueError, match="lacks ColumnName"):
         static.table_schema_columns(b"Name,Type\nMessage,string\n")
+
+
+def test_type_violations_mirror_fixture_cell_parsing() -> None:
+    profile = static.profile_csv(
+        _csv(
+            "Count,Score,Flag,Ratio,Seen [UTC],Note",
+            "3,1.5,True,nan,not a date,x",
+            ",inf,yes,2,,",
+        )
+    )
+    types = {
+        "Count": "long",
+        "Score": "real",
+        "Flag": "bool",
+        "Ratio": "Double",
+        "Seen": "datetime",
+        "Note": "int",
+    }
+
+    assert static.type_violations(profile, [types]) == ["Score", "Flag", "Ratio", "Note"]
+    assert static.type_violations(profile, [types, {"Score": "string"}]) == [
+        "Flag",
+        "Ratio",
+        "Note",
+    ]
+    assert static.type_violations(profile, []) == []
 
 
 @pytest.mark.parametrize(

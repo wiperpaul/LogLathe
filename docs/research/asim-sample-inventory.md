@@ -58,7 +58,8 @@ requested schema.
 - **Readiness.** A pairing is `ready` when static analysis finds nothing beyond
   the sample and parser that local native execution would need. It is
   `needs-setup` when the blockers below need a fixture author's attention, and
-  `excluded` when the input is normalized or a duplicate.
+  `excluded` when the input is normalized, a duplicate, or cannot load as its
+  declared table.
 
 | Blocker | Meaning |
 | --- | --- |
@@ -70,6 +71,7 @@ requested schema.
 | `source-setup` | The parser filters through a watchlist or `_ASIM_GetSourceBySourceType`. |
 | `normalized-input` | The sample is already normalized (an `ASim*Logs` table or populated `EventSchema`). |
 | `duplicate-sample` | Another sample has at least 90% row similarity. |
+| `type-violations` | A populated cell cannot load as the integer, real or boolean type that every covering table schema declares. |
 
 `needs-setup` is achievable work, not a dead end. Four existing fixtures fall
 into it: OpenSSH, and the Cisco ASA, Cisco Meraki and Carbon Black Cloud
@@ -82,12 +84,12 @@ tables for unions the sample does not contain.
 | Schema | Source parsers | Parsers with a sample | Samples | Pairings | Ready | Ready, raw text | Needs setup | Excluded |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Authentication | 50 | 32 | 35 | 36 | 8 | 4 | 24 | 4 |
-| NetworkSession | 42 | 20 | 25 | 23 | 9 | 2 | 13 | 1 |
+| NetworkSession | 42 | 20 | 25 | 23 | 8 | 1 | 13 | 2 |
 | AuditEvent | 24 | 17 | 20 | 20 | 11 | 4 | 6 | 3 |
-| Total | 116 | 69 | 80 | 79 | 28 | 10 | 43 | 8 |
+| Total | 116 | 69 | 80 | 79 | 27 | 9 | 43 | 9 |
 
-A sample paired with two parsers contributes two pairings. The 28 ready
-pairings cover 28 parsers from 13 vendors, compared with five source families
+A sample paired with two parsers contributes two pairings. The 27 ready
+pairings cover 27 parsers from 12 vendors, compared with five source families
 in the current fixtures.
 
 Input shape determines what a blind evaluation can show:
@@ -104,16 +106,16 @@ companion is a separate `_RawLogs` export. Structured-only samples, 43 of the
 
 Blocker counts over all pairings were: unsupported parameters 33, column types
 25, missing tables 15, duplicate sample 6, ambiguous parser 4, unknown source
-table 2, normalized input 2, and source setup 2. The command also read 43
-table-schema files and 195 tester exports. It skipped six schema unions and
-three empty parsers.
+table 2, normalized input 2, source setup 2, and type violations 1. The command
+also read 43 table-schema files and 195 tester exports. It skipped six schema
+unions and three empty parsers.
 
 ## What Jev and mapping evaluation can use now
 
 Reference preparation turns one message column per row (the fixture's
 `message_field`) into the events that Jev and the mapping approaches see. Only
-raw-text pairings fit that today, so the useful headline is 10 ready pairings,
-not 28.
+raw-text pairings fit that today, so the useful headline is 9 ready pairings,
+not 27.
 
 | Schema | Parser | Rows | Relation to current fixtures |
 | --- | --- | ---: | --- |
@@ -122,13 +124,17 @@ not 28.
 | Authentication | `ASimAuthenticationPaloAltoCortexDataLake` | 2 | New; too small alone |
 | Authentication | `ASimAuthenticationVectraXDRAudit` | 47 | New |
 | NetworkSession | `ASimNetworkSessionBarracudaWAF` | 15 | Existing fixture |
-| NetworkSession | `ASimNetworkSessionCheckPointFirewall` | 41 | New |
 | AuditEvent | `ASimAuditEventBarracudaWAF` | 15 | Replacement sample for an existing fixture |
 | AuditEvent | `ASimAuditEventCiscoMeraki` | 21 | Existing fixture |
 | AuditEvent | `ASimAuditEventInfobloxBloxOne` | 20 | New |
 | AuditEvent | `ASimAuditEventVectraXDRAudit` | 42 | New |
 
-All ten read their text from `Message`. Another 15 raw-text pairings need setup.
+All nine read their text from `Message`. Raw text measures how often the column
+is filled, not how much it says. The Cisco ASA, Cisco Meraki and Barracuda WAF
+messages are full syslog or CEF lines. The four new samples carry short event
+descriptions instead, such as `log in` or `Invalid Certificate`, with a median
+of 19 to 24 characters, like the Carbon Black Cloud fixtures. Their events give
+Jev less to work with. Another 15 raw-text pairings need setup.
 Three of those are existing fixtures that already run with a `source-setup.kql`
 (OpenSSH, and Cisco ASA and Cisco Meraki NetworkSession), and one is the
 replacement Barracuda WAF Authentication sample. The other 11 come from Cisco
@@ -152,6 +158,11 @@ pooled across fixtures, as in the
   files, at the root and under `SonicWallFirewall/`, list table columns rather
   than log rows. The inventory recognises the header and reads them as table
   schemas.
+- **Placeholder sample.** Every row of the Check Point Firewall NetworkSession
+  sample has `Message` set to `test`, and 17 integer or real columns hold `test`
+  too. The file cannot load as `CommonSecurityLog`, so it was not exported
+  unchanged from a Log Analytics workspace. The inventory excludes it with
+  `type-violations`; no other sample has a cell that breaks its declared type.
 - **Samples without a parser.** Three samples remain unpaired. Cynerio's
   Authentication and NetworkSession samples have no parser that reads their
   table. SonicOS uses a shared table without vendor identity evidence.
@@ -200,7 +211,7 @@ in-house logs. That decision is still open.
 
 ## Next stages
 
-1. Turn the five new ready raw-text pairings into reference fixtures with the
+1. Turn the four new ready raw-text pairings into reference fixtures with the
    existing fixture contract, and capture their native output locally. Assign
    them to the frozen split before tuning anything.
 2. Run Jev reference agreement and `reference compare` pooled across all
