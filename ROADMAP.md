@@ -3,7 +3,7 @@
 Status: active
 Current milestone: 2 — continuous assisted ASIM review
 Canonical for: remaining and deliberately deferred work
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-01
 
 This roadmap describes what remains to be built. Current behavior and durable
 invariants are documented in [architecture](docs/architecture.md); completed
@@ -55,6 +55,24 @@ These remain advisory experiments alongside deterministic review and compilation
 Complete recorded queue runs can now populate the existing Potato Schema tab with
 ranked choices, definitions and provenance. Explicit confirmation, override and
 deferral reuse the existing review controls without new provider calls.
+
+## Experiment status
+
+Evaluation experiments are either frozen, so recorded evidence keeps replaying,
+or active baselines that are rerun from code.
+
+- **Frozen:** Jev decision specifications v1–v4, their `--nouls` probes, and v3
+  `--staged` classification. Replay, the dashboard and Potato's recorded
+  suggestions rebuild byte-identical requests, so these change only through a new
+  specification after the review interpretation below. v1 remains the default;
+  v4, the strongest development result, remains opt-in. See
+  [frozen specifications](docs/jev-schema-experiment.md#frozen-specifications).
+- **Complete:** the OpenSSH, Meraki, Barracuda, Carbon Black Cloud and Cisco ASA
+  Jev trials. These families are inspected development evidence; a fresh test
+  needs a newly reserved source family.
+- **Active:** the seven registered semantic-mapping approaches, controlled
+  robustness, and benchmark tracks. They are rerun against the same corpora and
+  remain the comparison set for the provider-selection evaluation below.
 
 ## Milestone 2 — Continuous assisted ASIM review
 
