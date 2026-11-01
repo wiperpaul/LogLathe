@@ -2,16 +2,22 @@
 
 Status: research evidence; static analysis only, no parser executed
 Reviewed: 2026-11-01
-Canonical for: which public ASIM samples and parsers can support a larger-scale evaluation
+Canonical for: which public ASIM samples and parsers can become reference fixtures for Jev schema and field-mapping evaluation
 
-The current reference fixtures cover five source families. Microsoft's
-Azure-Sentinel repository publishes many more ASIM parsers, often beside an
-ingested sample and sometimes a raw log export, a table schema, or contributor
-tester output. This inventory measures how much of that material could provide
-reference evidence for Authentication, NetworkSession and AuditEvent. The goal is
-broad coverage to expose edge cases, which will later inform blind schema and
-mapping decisions on in-house logs. Other schemas can be added later through the
-same command.
+The aim is to test Jev's schema-level predictions and our field-mapping
+predictions against Microsoft's own parsers on as many sources as possible, to
+expose edge cases before blind decisions on in-house logs. The current
+reference fixtures cover five source families. Microsoft's Azure-Sentinel
+repository publishes many more ASIM parsers, often beside an ingested sample and
+sometimes a raw log export, a table schema, or contributor tester output.
+
+Both evaluations need a reference fixture: a pinned sample and parser whose
+native output supplies the labels. Each emitted row's `EventSchema` labels
+schema selection, and its normalized fields label mappings. This inventory is
+the selection step. It lists which published sample and parser pairs for
+Authentication, NetworkSession and AuditEvent could become fixtures, and what
+each would need. It runs neither Jev nor any parser. Other schemas can be added
+later through the same command.
 
 The inventory is not a new data source. It reads the public repository at one
 immutable commit, verifies every file against its Git blob SHA, and stores the
@@ -73,12 +79,12 @@ tables for unions the sample does not contain.
 
 ## Results at `2985095`
 
-| Schema | Source parsers | Parsers with a sample | Samples | Pairings | Ready | Needs setup | Excluded |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Authentication | 50 | 32 | 35 | 36 | 8 | 24 | 4 |
-| NetworkSession | 42 | 20 | 25 | 23 | 9 | 13 | 1 |
-| AuditEvent | 24 | 17 | 20 | 20 | 11 | 6 | 3 |
-| Total | 116 | 69 | 80 | 79 | 28 | 43 | 8 |
+| Schema | Source parsers | Parsers with a sample | Samples | Pairings | Ready | Ready, raw text | Needs setup | Excluded |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Authentication | 50 | 32 | 35 | 36 | 8 | 4 | 24 | 4 |
+| NetworkSession | 42 | 20 | 25 | 23 | 9 | 2 | 13 | 1 |
+| AuditEvent | 24 | 17 | 20 | 20 | 11 | 4 | 6 | 3 |
+| Total | 116 | 69 | 80 | 79 | 28 | 10 | 43 | 8 |
 
 A sample paired with two parsers contributes two pairings. The 28 ready
 pairings cover 28 parsers from 13 vendors, compared with five source families
@@ -101,6 +107,39 @@ Blocker counts over all pairings were: unsupported parameters 33, column types
 table 2, normalized input 2, and source setup 2. The command also read 43
 table-schema files and 195 tester exports. It skipped six schema unions and
 three empty parsers.
+
+## What Jev and mapping evaluation can use now
+
+Reference preparation turns one message column per row (the fixture's
+`message_field`) into the events that Jev and the mapping approaches see. Only
+raw-text pairings fit that today, so the useful headline is 10 ready pairings,
+not 28.
+
+| Schema | Parser | Rows | Relation to current fixtures |
+| --- | --- | ---: | --- |
+| Authentication | `ASimAuthenticationCiscoASA` | 217 | Existing fixture |
+| Authentication | `ASimAuthenticationCiscoMeraki` | 18 | Existing fixture |
+| Authentication | `ASimAuthenticationPaloAltoCortexDataLake` | 2 | New; too small alone |
+| Authentication | `ASimAuthenticationVectraXDRAudit` | 47 | New |
+| NetworkSession | `ASimNetworkSessionBarracudaWAF` | 15 | Existing fixture |
+| NetworkSession | `ASimNetworkSessionCheckPointFirewall` | 41 | New |
+| AuditEvent | `ASimAuditEventBarracudaWAF` | 15 | Replacement sample for an existing fixture |
+| AuditEvent | `ASimAuditEventCiscoMeraki` | 21 | Existing fixture |
+| AuditEvent | `ASimAuditEventInfobloxBloxOne` | 20 | New |
+| AuditEvent | `ASimAuditEventVectraXDRAudit` | 42 | New |
+
+All ten read their text from `Message`. Another 15 raw-text pairings need setup.
+Three of those are existing fixtures that already run with a `source-setup.kql`
+(OpenSSH, and Cisco ASA and Cisco Meraki NetworkSession), and one is the
+replacement Barracuda WAF Authentication sample. The other 11 come from Cisco
+ISE, Cisco FTD, Palo Alto, VMware ESXi and Zscaler ZPA parsers, and two shared
+samples among them also carry the `ambiguous-parser` blocker.
+
+The 12 raw-companion and 34 structured pairings that are ready or need setup
+cannot reach Jev until their representation is decided. Each fixture also holds
+a single schema, so one fixture alone rewards a constant answer. Results must be
+pooled across fixtures, as in the
+[Jev schema experiment](../jev-schema-experiment.md).
 
 ## Edge cases found
 
@@ -135,9 +174,14 @@ three empty parsers.
   describe the contributor's workspace at the time, not the published sample bytes.
 - **Fixture drift.** Five pinned fixture parsers changed upstream after their
   pinned revisions: Barracuda WAF Authentication and AuditEvent, Cisco Meraki
-  AuditEvent and NetworkSession, and Carbon Black Cloud AuditEvent. Their pinned
-  samples and the three corpus raw logs are unchanged. The fixtures remain valid
-  at their pins. A refresh would be a deliberate, separately reviewed change.
+  AuditEvent and NetworkSession, and Carbon Black Cloud AuditEvent. Upstream
+  also replaced both Barracuda WAF samples those fixtures pin. The pinned paths
+  no longer exist, and the new `Barracuda_WAF_Authentication_IngestedLogs.csv`
+  and `Barracuda_WAF_AuditEvent_IngestedLogs.csv` have different bytes. The
+  inventory reports such paths as `missing`. The other pinned samples, the
+  pinned table schema and the three corpus raw logs are unchanged. The fixtures
+  remain valid at their pins. A refresh would be a deliberate, separately
+  reviewed change.
 
 ## Interpretation and blind-input rules
 
@@ -156,14 +200,17 @@ in-house logs. That decision is still open.
 
 ## Next stages
 
-1. Capture native reference output for the ready pairings using the existing
-   reference fixture contract and local Kusto execution, without new
-   validation machinery.
-2. Add tester-style conformance checks on those captures, reusing catalogue
-   checks and keeping conformance separate from schema correctness.
-3. Work through `needs-setup` pairings, starting with declared column types,
-   empty stub tables, and parameter defaults. Then run the scaled blind
-   evaluation on inputs filtered by the rules above.
+1. Turn the five new ready raw-text pairings into reference fixtures with the
+   existing fixture contract, and capture their native output locally. Assign
+   them to the frozen split before tuning anything.
+2. Run Jev reference agreement and `reference compare` pooled across all
+   fixtures, and record where predictions disagree with the parsers.
+3. Work through raw-text `needs-setup` pairings, starting with declared column
+   types, empty stub tables, and parameter defaults.
+4. Decide how raw-companion and structured samples are presented to Jev and the
+   mapping approaches, then add tester-style conformance checks on captures,
+   reusing catalogue checks and keeping conformance separate from schema
+   correctness.
 
 Automatic parser creation remains out of scope until these stages show where
 existing parsers and samples disagree.

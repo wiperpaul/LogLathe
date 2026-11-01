@@ -65,13 +65,14 @@ class ExistingUse(StrictModel):
     id: str
     path: str
     revision: str
-    current: bool
+    upstream: Literal["unchanged", "changed", "missing", "not-inventoried"]
 
 
 class TableSchemaFile(StrictModel):
     file: UpstreamFile
     table: str
     columns: int = Field(ge=0)
+    existing_uses: list[ExistingUse] = Field(default_factory=list)
 
 
 class SampleRecord(StrictModel):
@@ -149,6 +150,10 @@ class AsimInventory(StrictModel):
     table_schemas: list[TableSchemaFile]
     tester_results: list[TesterResult]
     pairings: list[Pairing]
+    unattached_uses: list[ExistingUse] = Field(
+        default_factory=list,
+        description="Pinned paths in listed directories that no inventory record holds.",
+    )
     skipped: list[SkippedFile]
     warnings: list[str]
 
@@ -185,12 +190,14 @@ def build_inventory(
     try:
         sample_entries = tree.files(SAMPLE_ROOT)
         builder.listed[SAMPLE_ROOT] = len(sample_entries)
+        builder.paths.update(entry.path for entry in sample_entries)
         builder.add_sample_directory(sample_entries, cache)
         for schema in schemas:
             for folder in ("Parsers", "Tests", "test"):
                 directory = f"Parsers/ASim{schema}/{folder}"
                 entries = tree.files(directory)
                 builder.listed[directory] = len(entries)
+                builder.paths.update(entry.path for entry in entries)
                 if folder == "Parsers":
                     builder.add_parsers(schema, entries, cache)
                 else:
@@ -217,6 +224,7 @@ class _Builder:
     def __init__(self, schemas: list[str]) -> None:
         self.schemas = schemas
         self.listed: dict[str, int] = {}
+        self.paths: set[str] = set()
         self.samples: list[_Sample] = []
         self.table_schemas: list[TableSchemaFile] = []
         self.parsers: list[tuple[ParserRecord, static.ParserFacts]] = []
@@ -379,30 +387,26 @@ class _Builder:
         order = {schema: index for index, schema in enumerate(self.schemas)}
         self.parsers.sort(key=lambda item: (order[item[0].schema_name], item[0].name))
         self.samples.sort(key=lambda sample: sample.file.path)
-        current = {
+        held = {
             item.file.path: item.file.sha256
             for item in [*(record for record, _ in self.parsers), *self.table_schemas]
         }
         for sample in self.samples:
-            current[sample.file.path] = sample.file.sha256
+            held[sample.file.path] = sample.file.sha256
             if sample.raw is not None:
-                current[sample.raw.path] = sample.raw.sha256
+                held[sample.raw.path] = sample.raw.sha256
 
         def uses_of(*paths: str) -> list[ExistingUse]:
             return [
-                ExistingUse(
-                    kind=use.kind,
-                    id=use.id,
-                    path=use.path,
-                    revision=use.revision,
-                    current=current.get(use.path) == use.sha256,
-                )
+                _existing_use(use, "unchanged" if held[use.path] == use.sha256 else "changed")
                 for use in uses
                 if use.path in paths
             ]
 
         for record, _ in self.parsers:
             record.existing_uses = uses_of(record.file.path)
+        for table_schema in self.table_schemas:
+            table_schema.existing_uses = uses_of(table_schema.file.path)
         candidates = _candidates(self.samples, self.parsers)
         duplicates = _duplicates(
             self.samples,
@@ -420,6 +424,15 @@ class _Builder:
         pairings = _pairings(
             records, candidates, self.parsers, self.table_schemas, uses, self.schemas
         )
+        unattached = sorted(
+            (
+                _existing_use(use, "not-inventoried" if use.path in self.paths else "missing")
+                for use in uses
+                if use.path not in held
+                and any(use.path.startswith(f"{directory}/") for directory in self.listed)
+            ),
+            key=lambda use: (use.id, use.path),
+        )
         for tester in self.testers:
             tester.parsers = _tester_parsers(tester, [record for record, _ in self.parsers])
         table_schemas = sorted(self.table_schemas, key=_file_path)
@@ -435,6 +448,7 @@ class _Builder:
             table_schemas=table_schemas,
             tester_results=testers,
             pairings=pairings,
+            unattached_uses=unattached,
             skipped=skipped,
             warnings=self.warnings,
         )
@@ -761,6 +775,14 @@ def _tester_parsers(tester: TesterResult, parsers: list[ParserRecord]) -> list[s
         return []
     top = max(best.values())
     return sorted(name for name, score in best.items() if score == top)
+
+
+def _existing_use(
+    use: _Use, upstream: Literal["unchanged", "changed", "missing", "not-inventoried"]
+) -> ExistingUse:
+    return ExistingUse(
+        kind=use.kind, id=use.id, path=use.path, revision=use.revision, upstream=upstream
+    )
 
 
 def _existing_uses(fixtures_dir: Path | None, corpora_dir: Path | None) -> list[_Use]:

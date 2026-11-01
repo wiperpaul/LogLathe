@@ -15,7 +15,7 @@ They reuse the [reference workflow](../../docs/reference-pilot.md); normal tests
 verify captures offline without Docker, downloads, or a provider key. The
 [ASIM sample inventory](../../docs/research/asim-sample-inventory.md) identifies
 further upstream sample and parser pairs that could become fixtures, and the
-pinned parsers that have since changed upstream.
+pinned parsers and samples that have since changed or disappeared upstream.
 
 ## Frozen fixture split
 

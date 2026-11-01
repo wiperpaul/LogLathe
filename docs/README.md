@@ -35,8 +35,9 @@ authoritative descriptions of current implementation status.
 - [Microsoft ASIM agent principles](research/asim-agent-principles.md) records
   source-based reasoning, validation limits, and guidance for future field classification.
 - [ASIM sample inventory](research/asim-sample-inventory.md) records which public
-  Authentication, NetworkSession and AuditEvent samples pair with upstream parsers,
-  their readiness for native capture, and edge cases for blind evaluation.
+  Authentication, NetworkSession and AuditEvent samples pair with upstream parsers
+  and could become reference fixtures for Jev schema and field-mapping evaluation,
+  and the edge cases found.
 - [Jev operational-state guidance](research/jev-operational-state-guidance.md)
   records the maintainer-informed v4 definitions; the
   [completed comparison](research/jev-operational-state-assessment-2026-10-19.md)

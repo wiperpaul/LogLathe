@@ -18,6 +18,9 @@ from asim_forge.reference.inventory_report import render_inventory
 _SAMPLES = "Sample Data/ASIM"
 _PARSERS = "Parsers/ASimAuthentication/Parsers"
 _OLD_REVISION = "fedcba9876543210fedcba9876543210fedcba98"
+_REMOVED_SAMPLE = f"{_SAMPLES}/Contoso_Gateway_ASimAuthentication_Removed.csv"
+_UNION_PARSER = f"{_PARSERS}/ASimAuthentication.yaml"
+_CONTOSO_SCHEMA = f"{_SAMPLES}/ContosoGateway_CL_Schema.csv"
 
 
 def _parser(
@@ -211,6 +214,10 @@ def _registries(tmp_path: Path) -> tuple[Path, Path]:
         resources=[
             Resource(file="sample.csv", source_path=_CONTOSO_CSV, sha256=_sha256(_CONTOSO_CSV)),
             Resource(file="parser.yaml", source_path=_CONTOSO_PARSER, sha256="0" * 64),
+            Resource(file="removed.csv", source_path=_REMOVED_SAMPLE, sha256="1" * 64),
+            Resource(file="union.yaml", source_path=_UNION_PARSER, sha256="2" * 64),
+            Resource(file="schema.csv", source_path=_CONTOSO_SCHEMA, sha256="4" * 64),
+            Resource(file="LICENSE", source_path="LICENSE", sha256="3" * 64),
         ],
         redistribution="content",
         attribution="Synthetic test fixture.",
@@ -373,15 +380,20 @@ def test_inventory_tracks_existing_uses_testers_and_skips(tmp_path: Path) -> Non
     inventory = _build(tmp_path)
 
     uses = {
-        (use.kind, use.path): use.current
-        for item in [*inventory.parsers, *inventory.samples]
+        (use.kind, use.path): use.upstream
+        for item in [*inventory.parsers, *inventory.samples, *inventory.table_schemas]
         for use in item.existing_uses
     }
     assert uses == {
-        ("reference-fixture", _CONTOSO_PARSER): False,
-        ("reference-fixture", _CONTOSO_CSV): True,
-        ("corpus", _CONTOSO_RAW): True,
+        ("reference-fixture", _CONTOSO_PARSER): "changed",
+        ("reference-fixture", _CONTOSO_CSV): "unchanged",
+        ("reference-fixture", _CONTOSO_SCHEMA): "changed",
+        ("corpus", _CONTOSO_RAW): "unchanged",
     }
+    assert [(use.path, use.upstream) for use in inventory.unattached_uses] == [
+        (_UNION_PARSER, "not-inventoried"),
+        (_REMOVED_SAMPLE, "missing"),
+    ]
     testers = {
         tester.file.path.rsplit("/", 1)[-1]: (tester.kind, tester.variant, tester.parsers)
         for tester in inventory.tester_results
@@ -493,10 +505,11 @@ def test_report_summarises_pairings_and_escapes_table_cells(tmp_path: Path) -> N
 
     report = render_inventory(inventory)
 
-    assert "| Authentication | 6 | 6 | 9 | 7 | 1 | 4 | 2 |" in report
+    assert "| Authentication | 6 | 6 | 9 | 7 | 1 | 1 | 4 | 2 |" in report
     assert "missing-tables (Syslog), column-types" in report
     assert "ready (contoso-gateway-authentication-v1)" in report
-    assert "| `fedcba9` | no |" in report
+    assert "| `fedcba9` | changed |" in report
+    assert f"| {_REMOVED_SAMPLE} | `fedcba9` | missing |" in report
     assert "| 1 | 0 | left \\| right |" in report
 
 

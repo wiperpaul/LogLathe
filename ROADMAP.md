@@ -159,8 +159,9 @@ contracts when needed:
 - Assemble the first 30–50 independently reviewed cases across multiple source
   families, including `unresolved` and `not_applicable` outcomes.
 - Broaden reference evidence using the
-  [ASIM sample inventory](docs/research/asim-sample-inventory.md): capture native
-  output for its 28 ready pairings, then resolve `needs-setup` pairings.
+  [ASIM sample inventory](docs/research/asim-sample-inventory.md): turn its new
+  ready raw-text pairings into fixtures for pooled Jev and mapping evaluation,
+  then resolve `needs-setup` pairings and decide how structured samples are presented.
 - Lock group assignments and held-out labels before tuning approaches.
 - Report per-schema and minority-role results beside aggregate metrics.
 - Measure median active review time, acceptance/edit rates, deferral, and

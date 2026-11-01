@@ -9,7 +9,6 @@ from pathlib import Path
 from .inventory import SAMPLE_ROOT, AsimInventory
 
 SHAPES = ("raw-text", "raw-companion", "structured", "normalized-input")
-STATUSES = ("ready", "needs-setup", "excluded")
 
 
 def write_inventory(inventory: AsimInventory, output_dir: Path) -> tuple[Path, Path]:
@@ -42,26 +41,31 @@ def render_inventory(inventory: AsimInventory) -> str:
         "## Summary",
         "",
         "| Schema | Source parsers | Parsers with a sample | Samples | Paired samples "
-        "| Ready | Needs setup | Excluded |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Ready | Ready, raw text | Needs setup | Excluded |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for schema in inventory.schemas:
         parsers = [parser for parser in inventory.parsers if parser.schema_name == schema]
         schema_samples = [sample for sample in inventory.samples if sample.schema_name == schema]
-        statuses = Counter(
-            pairing.status for pairing in inventory.pairings if pairing.schema_name == schema
+        pairings = [pairing for pairing in inventory.pairings if pairing.schema_name == schema]
+        statuses = Counter(pairing.status for pairing in pairings)
+        raw_text = sum(
+            pairing.status == "ready" and samples[pairing.sample].input_shape == "raw-text"
+            for pairing in pairings
         )
         lines.append(
             f"| {schema} | {len(parsers)} "
             f"| {sum(parser.name in paired_parsers for parser in parsers)} "
             f"| {len(schema_samples)} "
             f"| {sum(sample.file.path in paired_samples for sample in schema_samples)} "
-            + "".join(f"| {statuses[status]} " for status in STATUSES)
-            + "|"
+            f"| {statuses['ready']} | {raw_text} "
+            f"| {statuses['needs-setup']} | {statuses['excluded']} |"
         )
     lines += [
         "",
-        "Status counts are pairings; a sample paired with two parsers counts twice.",
+        "Status counts are pairings; a sample paired with two parsers counts twice. "
+        "Raw-text pairings carry the original message in one column, which is what "
+        "reference preparation turns into schema-selection inputs today.",
         "",
         "## Input shapes",
         "",
@@ -176,21 +180,30 @@ def render_inventory(inventory: AsimInventory) -> str:
     else:
         lines.append("None.")
     uses = [
-        (use, item.file.path)
-        for item in [*inventory.parsers, *inventory.samples]
-        for use in item.existing_uses
+        *(
+            use
+            for item in [*inventory.parsers, *inventory.samples, *inventory.table_schemas]
+            for use in item.existing_uses
+        ),
+        *inventory.unattached_uses,
     ]
-    lines += ["", "## Existing fixtures and corpora", ""]
+    lines += [
+        "",
+        "## Existing fixtures and corpora",
+        "",
+        "Pinned files in the listed directories, compared with this revision: `changed` "
+        "means different bytes, `missing` means the path is gone, and `not-inventoried` "
+        "means the file exists but no parser or sample record holds it.",
+        "",
+    ]
     if uses:
         lines += [
-            "| Use | Kind | Upstream path | Pinned revision | Unchanged here |",
+            "| Use | Kind | Upstream path | Pinned revision | Upstream here |",
             "| --- | --- | --- | --- | --- |",
         ]
         lines += [
-            _row(
-                use.id, use.kind, use.path, f"`{use.revision[:7]}`", "yes" if use.current else "no"
-            )
-            for use, _ in sorted(uses, key=lambda item: (item[0].id, item[0].path))
+            _row(use.id, use.kind, use.path, f"`{use.revision[:7]}`", use.upstream)
+            for use in sorted(uses, key=lambda use: (use.id, use.path))
         ]
     else:
         lines.append("None.")
