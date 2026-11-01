@@ -3,7 +3,7 @@
 Status: current
 Audience: contributors, integrators, and reviewers of architectural changes
 Canonical for: pipeline boundaries, ownership, and design invariants
-Last verified: 2026-10-29
+Last verified: 2026-11-01
 
 LogLathe is a human-in-the-loop workbench for turning security-log evidence into
 reviewable normalization candidates. Its installed Python distribution and command
@@ -82,8 +82,9 @@ after prediction and stay outside `MappingRequest`.
 
 An optional recorded Jev report supplies schema advice through
 `review prepare --schema-report`. Import verifies the exact unlabelled queue,
-catalogue revision, request evidence, and completed responses using the existing
-replay checks. The suggestion, definitions and report hash participate in the
+catalogue revision, request evidence, and completed responses with
+`schema_ranking/recorded.py`, the same recorded-run verification that backs the
+replay dashboard. The suggestion, definitions and report hash participate in the
 immutable task revision. No inference runs during preparation or review. A valid
 top choice initializes the schema draft; ties, Unsupported and unavailable schemas
 leave it unselected. The reviewer must confirm or override it, or defer. Field
