@@ -13,28 +13,14 @@ from ..evaluation import EvaluationError, load_semantic_mapping_cases
 from ..semantic_annotation.artifacts import load_semantic_annotation_queue
 from ..semantic_mapping.comparison import ComparisonReport
 from .approaches import SourceConceptSchemaRanker
-from .contracts import SchemaRankingPrediction, SchemaRankingRequest
-from .jev import (
-    SCHEMA_DEFINITIONS,
-    STAGED_POLICY_VERSION,
-    JevNoul,
-    JevResponse,
-    build_jev_followup_request,
-    build_jev_request,
-    request_hash,
-)
+from .contracts import SchemaRankingRequest
+from .jev import SCHEMA_DEFINITIONS, JevNoul
 from .jev_experiment import SchemaExperimentInput, from_labelled_case
+from .recorded import VerifiedJevAnswer, index_case_rows, unique_choice, verify_jev_run
 
 
 def _read(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _index(rows: list[dict[str, Any]], ids: set[str]) -> dict[str, dict[str, Any]]:
-    result = {row["case_id"]: row for row in rows}
-    if len(result) != len(rows) or set(result) != ids:
-        raise EvaluationError("Dashboard reports must cover the same unique case IDs as the input")
-    return result
 
 
 def load_dashboard_inputs(path: Path, kind: str) -> list[SchemaExperimentInput]:
@@ -70,19 +56,14 @@ def _reference(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _choice(response: JevResponse, selected: str | None) -> dict[str, Any]:
-    choice = response.schema_choice
-    top = max(choice.probabilities.values())
-    tied = sum(value == top for value in choice.probabilities.values()) > 1
-    expected = None if tied else choice.choice
-    if selected != expected:
-        raise EvaluationError("Recorded selection disagrees with the response or its tied maximum")
+def _choice(answer: VerifiedJevAnswer) -> dict[str, Any]:
+    choice = answer.response.schema_choice
     return {
-        "selected": selected,
+        "selected": answer.selected_schema,
         "scores": choice.probabilities,
         "confidence": choice.confidence,
         "score_kind": "Probability",
-        "status": "tied_top" if tied else "completed",
+        "status": "tied_top" if unique_choice(choice) is None else "completed",
     }
 
 
@@ -148,22 +129,20 @@ def dashboard_data(
     reference_identity = None
     for run_index, (label, directory) in enumerate(runs):
         report_path = directory / "report.json"
-        report = _read(report_path)
-        if report.get("decision_policy") not in (None, STAGED_POLICY_VERSION):
-            raise EvaluationError("Unknown recorded staged decision policy")
-        current_revision = report["catalogue_revision"]
-        if revision is not None and current_revision != revision:
+        content = report_path.read_bytes()
+        report = json.loads(content)
+        if revision is not None and report["catalogue_revision"] != revision:
             raise EvaluationError("Dashboard runs must use the same catalogue revision")
-        revision = current_revision
-        rows = _index(report["rows"], ids)
+        run = verify_jev_run(report, inputs)
+        revision = run.catalogue_revision
         key = f"jev-{run_index}"
         classifiers.append(
             {
                 "id": key,
                 "label": label,
-                "detail": f"{report['spec_version']} · {report['context']}",
-                "model": report["model"],
-                "context": report["context"],
+                "detail": f"{run.spec_version} · {run.context}",
+                "model": run.model,
+                "context": run.context,
             }
         )
         reference_path = directory / "reference-agreement.json"
@@ -172,7 +151,7 @@ def dashboard_data(
             reference = _read(reference_path)
             if reference["catalogue_revision"] != revision:
                 raise EvaluationError("Reference and run catalogue revisions differ")
-            if reference["model"] != report["model"] or reference["context"] != report["context"]:
+            if reference["model"] != run.model or reference["context"] != run.context:
                 raise EvaluationError("Reference model or context differs from the recorded run")
             if reference["track"] != "asim-parser-silver":
                 raise EvaluationError("Expected an official-parser silver reference assessment")
@@ -180,13 +159,11 @@ def dashboard_data(
             if reference_identity is not None and reference_identity != identity:
                 raise EvaluationError("Dashboard runs must use the same reference captures")
             reference_identity = identity
-            reference_rows = _index(reference["cases"], ids)
+            reference_rows = index_case_rows(reference["cases"], ids)
             files.append({"name": f"{label} reference", "sha256": _digest(reference_path)})
         for item in inputs:
-            row = rows[item.case_id]
-            baseline = SchemaRankingPrediction.model_validate(row["baseline"])
-            if baseline.request_id != item.case_id:
-                raise EvaluationError("Baseline request identity does not match its case")
+            verified = run.cases[item.case_id]
+            baseline = verified.baseline
             frozen = baseline.model_dump(mode="json")
             if item.case_id in recorded_baselines and recorded_baselines[item.case_id] != frozen:
                 raise EvaluationError("Recorded runs have different baseline predictions")
@@ -200,57 +177,25 @@ def dashboard_data(
                 "status": baseline.disposition,
             }
             classifiers[0]["detail"] = f"Recorded v{baseline.approach.version} · template only"
-            request = build_jev_request(
-                item.source,
-                context=report["context"],
-                nouls=report["nouls"],
-                model=report["model"],
-                spec_version=report["spec_version"],
-            )
-            digest = request_hash(request, revision, spec_version=report["spec_version"])
-            classifiers[-1]["criteria"] = request.questions["schema"].criteria
+            classifiers[-1]["criteria"] = verified.request.questions["schema"].criteria
             classifiers[-1]["questions"] = {
-                name: question.instructions for name, question in request.questions.items()
+                name: question.instructions for name, question in verified.request.questions.items()
             }
-            if digest != row["request_hash"]:
-                raise EvaluationError(f"Run evidence does not match input for {item.case_id}")
-            if row.get("expected_schema") != item.expected_schema:
-                raise EvaluationError("Recorded run and input expected labels differ")
-            if row.get("label_source") != item.label_source:
-                raise EvaluationError("Recorded run and input label provenance differ")
-            if row["status"] == "completed":
-                response = JevResponse.model_validate(row["jev"]["response"])
-                probes = response
-                first_choice = None
-                if report.get("decision_policy"):
-                    probes = JevResponse.model_validate(row["probe_stage"]["response"])
-                    probes.validate_for(request)
-                    followup = build_jev_followup_request(request, probes)
-                    if row["final_request_hash"] != request_hash(
-                        followup, revision, spec_version=report["spec_version"]
-                    ):
-                        raise EvaluationError("Staged final request identity does not match probes")
-                    response.validate_for(followup)
-                    first_scores = probes.schema_choice.probabilities
-                    first_top = max(first_scores.values())
-                    first_choice = (
-                        "Tied top choices"
-                        if sum(value == first_top for value in first_scores.values()) > 1
-                        else probes.schema_choice.choice
-                    )
-                else:
-                    response.validate_for(request)
-                prediction = _choice(response, row["jev"]["selected_schema"])
+            answer = verified.answer
+            if answer is not None:
+                prediction = _choice(answer)
                 prediction.update(
                     {
                         "probes": [
-                            {"id": name, "value": answer.noul}
-                            for name, answer in probes.answers.items()
-                            if isinstance(answer, JevNoul)
+                            {"id": name, "value": probe.noul}
+                            for name, probe in answer.probes.answers.items()
+                            if isinstance(probe, JevNoul)
                         ],
-                        "first_choice": first_choice,
-                        "elapsed_seconds": row.get("elapsed_seconds"),
-                        "usage": response.usage.model_dump(),
+                        "first_choice": (answer.first_choice or "Tied top choices")
+                        if run.decision_policy
+                        else None,
+                        "elapsed_seconds": verified.elapsed_seconds,
+                        "usage": answer.response.usage.model_dump(),
                     }
                 )
             else:
@@ -258,12 +203,12 @@ def dashboard_data(
                     "selected": None,
                     "scores": {},
                     "score_kind": "Probability",
-                    "status": row["status"],
+                    "status": verified.status,
                 }
             cases[item.case_id]["predictions"][key] = prediction
             if reference_rows is not None:
                 ref_row = reference_rows[item.case_id]
-                if ref_row["request_hash"] != digest:
+                if ref_row["request_hash"] != verified.request_hash:
                     raise EvaluationError("Reference assessment does not belong to this request")
                 ref = _reference(ref_row)
                 if len(ref["events"]) != len(item.source.representative_events):
@@ -274,7 +219,7 @@ def dashboard_data(
                 if previous["kind"] == "Official parser" and previous != ref:
                     raise EvaluationError("Run reference labels or event coverage differ")
                 cases[item.case_id]["reference"] = ref
-        files.append({"name": label, "sha256": _digest(report_path)})
+        files.append({"name": label, "sha256": hashlib.sha256(content).hexdigest()})
     for path in comparisons or []:
         comparison = ComparisonReport.model_validate(_read(path))
         if comparison.oracle != "none" or comparison.context_view != "full":
@@ -285,7 +230,9 @@ def dashboard_data(
             raise EvaluationError("Mapping comparison catalogue differs from recorded runs")
         revision = comparison.catalogue_revision
         for approach in comparison.approaches:
-            rows = _index([row.model_dump(mode="json") for row in approach.predictions], ids)
+            rows = index_case_rows(
+                [row.model_dump(mode="json") for row in approach.predictions], ids
+            )
             key = f"mapping-{len(classifiers)}"
             classifiers.append(
                 {

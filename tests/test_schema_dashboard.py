@@ -11,10 +11,12 @@ from asim_forge.schema_ranking.dashboard import dashboard_data, export_dashboard
 from asim_forge.schema_ranking.jev import (
     AUTH_LIFECYCLE_SPEC_VERSION,
     SPEC_VERSION,
+    STAGED_POLICY_VERSION,
     DecisionSpec,
     JevResponse,
 )
 from asim_forge.schema_ranking.jev_experiment import from_labelled_case, run_schema_experiment
+from asim_forge.schema_ranking.recorded import verify_jev_run
 from asim_forge.semantic_mapping.comparison import compare_approaches
 
 
@@ -113,6 +115,25 @@ def test_response_and_staged_request_tampering_are_rejected(recorded):
     report_path.write_text(json.dumps(report), encoding="utf-8")
     with pytest.raises(EvaluationError, match="Staged final request"):
         dashboard_data([item], runs)
+
+
+def test_verified_runs_expose_recorded_evidence_without_presentation(recorded):
+    item, runs = recorded
+    report = json.loads((runs[1][1] / "report.json").read_text(encoding="utf-8"))
+    run = verify_jev_run(report, [item])
+    case = run.cases[item.case_id]
+    assert run.decision_policy == STAGED_POLICY_VERSION
+    assert case.answer is not None
+    assert case.answer.selected_schema == case.answer.first_choice == "Authentication"
+    assert case.answer.final_request_hash == report["rows"][0]["final_request_hash"]
+    assert case.answer.final_request_hash != case.request_hash
+    assert (
+        case.request.questions["schema"].criteria.keys()
+        == case.answer.response.schema_choice.probabilities.keys()
+    )
+    for inputs in ([], [item, item]):
+        with pytest.raises(EvaluationError, match="unique case IDs"):
+            verify_jev_run(report, inputs)
 
 
 def test_html_treats_source_and_labels_as_data_and_preserves_existing_exports(recorded, tmp_path):

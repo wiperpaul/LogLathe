@@ -312,7 +312,9 @@ uv run potato start artifacts/demo/mapping-with-jev/potato/config.yaml -p 8000
 The report must be a complete live or cached-replay run for the **exact approved
 queue**, using the same catalogue revision and source evidence. Labelled evaluation
 reports, partial runs, and mismatched cases are rejected. Preparation verifies the
-recorded requests and responses; it makes no API calls. The report's identity,
+recorded requests and responses; it makes no API calls. Only `report.json` is read:
+a `reference-agreement.json` beside it is shown by the
+[replay dashboard](schema-replay.md) and does not affect review. The report's identity,
 model, definitions, and probabilities become part of the frozen review evidence.
 Changing the report requires a new bundle and fresh decisions.
 

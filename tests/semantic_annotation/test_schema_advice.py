@@ -189,6 +189,15 @@ def test_mismatched_or_incomplete_advice_is_rejected_before_writing_bundle(
     assert not (tmp_path / "mapping").exists()
 
 
+def test_advice_import_reads_only_the_recorded_report(tmp_path, annotation_queue, recorded_schema):
+    report = recorded_schema()
+    # Reference assessments belong to the replay dashboard, not to review evidence.
+    (report.parent / "reference-agreement.json").write_text("{}", encoding="utf-8")
+    _, task, _ = prepare(tmp_path, annotation_queue, report)
+    assert task.schema_suggestion is not None
+    assert task.schema_suggestion.selected_schema == "NetworkSession"
+
+
 def test_cli_import_and_recorded_advice_participate_in_review_revision(
     tmp_path, annotation_queue, recorded_schema
 ):

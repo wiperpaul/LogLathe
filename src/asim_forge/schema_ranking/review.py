@@ -12,9 +12,9 @@ from pydantic import Field, model_validator
 
 from ..models import StrictModel
 from ..reviews import ReviewError
-from .dashboard import dashboard_data
 from .jev import SCHEMA_DEFINITIONS, UNSUPPORTED, DecisionSpec, Probability, QuestionEntry
 from .jev_experiment import SchemaExperimentInput
+from .recorded import verify_jev_run
 
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
@@ -52,7 +52,7 @@ class RecordedSchemaSuggestion(StrictModel):
 def load_recorded_schema_suggestions(
     path: Path, inputs: list[SchemaExperimentInput], catalogue_revision: str
 ) -> dict[str, RecordedSchemaSuggestion]:
-    """Reuse replay validation for source hashes, responses, ties and staged decisions.
+    """Verify recorded source hashes, responses, ties and staged decisions.
 
     The report must cover the exact approved queue and contain unlabelled cases.
     Native references are never substituted for model suggestions.
@@ -75,28 +75,28 @@ def load_recorded_schema_suggestions(
             raise ReviewError("Schema review requires a complete recorded live or replay report")
         if any(row.get("expected_schema") or row.get("label_source") for row in report["rows"]):
             raise ReviewError("Use an unlabelled queue report for assisted schema review")
-        validated = dashboard_data(inputs, [("Jev", path.parent)])
-        if path.read_bytes() != content:
-            raise ReviewError("Recorded schema report changed during import")
-        rows = {row["case_id"]: row for row in report["rows"]}
-        classifier = validated["classifiers"][1]
-        return {
-            case["id"]: RecordedSchemaSuggestion(
-                model=report["model"],
-                spec_version=report["spec_version"],
-                context=report["context"],
-                decision_policy=report.get("decision_policy"),
-                report_sha256=hashlib.sha256(content).hexdigest(),
-                request_hash=rows[case["id"]].get(
-                    "final_request_hash", rows[case["id"]]["request_hash"]
-                ),
-                selected_schema=case["predictions"]["jev-0"]["selected"],
-                probabilities=case["predictions"]["jev-0"]["scores"],
-                confidence=case["predictions"]["jev-0"]["confidence"],
-                definitions=classifier["criteria"],
+        # Verify the bytes that are hashed, so the recorded identity cannot drift.
+        run = verify_jev_run(report, inputs)
+        report_sha256 = hashlib.sha256(content).hexdigest()
+        suggestions = {}
+        for item in inputs:
+            verified = run.cases[item.case_id]
+            if verified.answer is None:
+                raise ReviewError("Schema review requires a completed recorded answer")
+            choice = verified.answer.response.schema_choice
+            suggestions[item.case_id] = RecordedSchemaSuggestion(
+                model=run.model,
+                spec_version=run.spec_version,
+                context=run.context,
+                decision_policy=run.decision_policy,
+                report_sha256=report_sha256,
+                request_hash=verified.answer.final_request_hash,
+                selected_schema=verified.answer.selected_schema,
+                probabilities=choice.probabilities,
+                confidence=choice.confidence,
+                definitions=verified.request.questions["schema"].criteria,
             )
-            for case in validated["cases"]
-        }
+        return suggestions
     except (OSError, ValueError, KeyError, TypeError) as error:
         if isinstance(error, ReviewError):
             raise
