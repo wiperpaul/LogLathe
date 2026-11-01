@@ -158,6 +158,10 @@ def test_structured_questions_preserve_projection_and_use_matching_probe_definit
             AUTH_LIFECYCLE_SPEC_VERSION,
             "4d463a624bf271ff59b6963f610d336fe2462cab82d3f62111eb347c1148dc26",
         ),
+        (
+            OPERATIONAL_STATE_SPEC_VERSION,
+            "9d28e0b19c1579580d808d39e03859aaf6ec8125952979d0510f57f4f93ff52c",
+        ),
     ],
 )
 def test_frozen_example_hashes_are_unchanged(spec_version, digest):

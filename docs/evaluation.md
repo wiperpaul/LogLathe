@@ -37,7 +37,9 @@ The opt-in [Jev schema experiment](jev-schema-experiment.md) evaluates only the
 schema-ranking boundary through `evaluation schema-rank`. It uses existing cases
 or annotation queues, prepares requests offline by default, and requires explicit
 `--live` execution. It is not a registered field-mapping approach and does not
-alter the comparison defaults below.
+alter the comparison defaults below. Its decision specifications are
+[frozen](jev-schema-experiment.md#frozen-specifications) so recorded runs keep
+replaying; definition changes add a new specification.
 
 The public-fixture trials compare Jev with native parser schema output, not
 independently adjudicated labels. Their latest frozen comparison and replay

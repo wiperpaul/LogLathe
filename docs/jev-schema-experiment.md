@@ -3,7 +3,7 @@
 Status: experimental; frozen source-family comparisons and offline replay completed, independent semantic quality unestablished
 Audience: schema-ranking contributors and reviewers
 Canonical for: Jev request construction, execution, replay, and evaluation limits
-Last verified: 2026-10-28
+Last verified: 2026-11-01
 
 ## Decision and scope
 
@@ -111,6 +111,30 @@ previous results unchanged. See the [guidance record](research/jev-operational-s
 for attribution and working boundaries, and the
 [assessment](research/jev-operational-state-assessment-2026-10-19.md) for results
 and the remaining review cases.
+
+### Frozen specifications
+
+| Specification | Hypothesis | Status | Evidence |
+| --- | --- | --- | --- |
+| `asim-primary-event-v1` | Primary action, without vendor rules | Default | [OpenSSH](research/jev-schema-assessment-2026-09-30.md), [Meraki](research/jev-meraki-assessment-2026-10-02.md), [Barracuda](research/jev-barracuda-assessment-2026-10-02.md), [expanded](research/jev-expanded-assessment-2026-10-02.md) |
+| `asim-boundaries-v2` | Structured AuditEvent boundaries | Not adopted: Meraki agreement fell from 13/32 to 11/32 | [AuditEvent boundaries](research/jev-audit-boundaries-2026-10-02.md) |
+| `asim-auth-lifecycle-v3` | Authentication lifecycle; the only specification that supports `--staged` | Opt-in | [Authentication plan](research/jev-auth-lifecycle-experiment.md), [expanded](research/jev-expanded-assessment-2026-10-02.md) |
+| `asim-operational-state-v4` | Maintainer operational-state guidance | Opt-in; parser agreement on 93/102 eligible templates versus v3's 85/102 (development evidence) | [Operational state](research/jev-operational-state-assessment-2026-10-19.md) |
+
+Every specification is frozen. `schema-rank --replay` finds cached responses by
+request hash and fails on a miss; `schema-view` and the Potato recorded-suggestion
+import rebuild each recorded request from its run's specification and reject a
+hash mismatch. Editing a definition, question, staged follow-up, or the shared
+enriched projection would therefore stop recorded runs from replaying or loading
+into review. `test_frozen_example_hashes_are_unchanged` pins one request hash per
+specification.
+
+Change definitions by adding a new specification version after the review
+interpretation described in the [roadmap](../ROADMAP.md#immediate-checkpoint--resolve-review-findings);
+do not edit an existing one. Removing a specification first requires retiring the
+recorded runs that use it from review and dashboard use. Preserved trials still
+replay on their recorded reproduction commit. Staging remains v3-only because
+it gave no additional top-choice gain; probes remain diagnostics.
 
 `--context template` sends just the template. The default, `enriched`, adds source
 vendor/product/table/message-column metadata when present, the first three event
