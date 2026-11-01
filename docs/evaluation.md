@@ -416,6 +416,13 @@ redistribution. Other remote resources are fetched for those explicit runs. All
 restored bytes are verified against their manifest digests, and transient HTTP
 failures receive bounded retries.
 
+`asim-forge reference inventory` applies the same pinning to the public
+Azure-Sentinel ASIM samples and parsers. It resolves one commit, verifies each
+file against its Git blob SHA, reuses the corpus cache, executes nothing, and
+writes its report under `artifacts/`. The
+[ASIM sample inventory](research/asim-sample-inventory.md) records its method,
+results, and the inputs that must not reach a blind evaluation.
+
 ## Automation and release policy
 
 `.github/workflows/evaluation.yml` runs the four repository-local corpora when
