@@ -77,7 +77,9 @@ Every ASIM projection must refer to a known source-semantic ID. Duplicate
 `(semantic_id, asim_field)` pairs are invalid, and every projection requires an
 evidence citation. During promotion, schema and field names are checked against the
 pinned catalogue, and constant values are checked against field types and allowed
-values. Case provenance records one of `human_review`, `adjudicated`, `synthetic`,
+values. Integer constants must fit the target's signed 32-bit or 64-bit range;
+real values must be finite, and datetime strings must parse as ISO dates or timestamps.
+Case provenance records one of `human_review`, `adjudicated`, `synthetic`,
 or `imported` plus any decision, annotator, and explanatory references.
 
 ### Dispositions

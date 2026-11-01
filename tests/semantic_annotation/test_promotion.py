@@ -202,6 +202,62 @@ def test_promotion_accepts_catalogue_compatible_scalar_constants(
     assert manifest.promoted_count == 1
 
 
+@pytest.mark.parametrize(
+    ("kind", "value", "valid"),
+    [
+        ("int", -(2**31), True),
+        ("int", 2**31 - 1, True),
+        ("int", -(2**31) - 1, False),
+        ("int", 2**31, False),
+        ("long", -(2**63), True),
+        ("long", 2**63 - 1, True),
+        ("long", -(2**63) - 1, False),
+        ("long", 2**63, False),
+        ("real", 0.75, True),
+        ("real", float("inf"), False),
+        ("real", float("-inf"), False),
+        ("real", float("nan"), False),
+        ("real", 10**1000, False),
+        ("double", float("inf"), False),
+        ("datetime", "2026-11-01T12:30:00Z", True),
+        ("datetime", "2026-11-01", True),
+        ("datetime", "not-a-date", False),
+        ("datetime", "2026-02-30T12:30:00Z", False),
+    ],
+)
+def test_promotion_validates_constant_values_before_writing_gold(
+    annotation_queue, decision_factory, tmp_path, kind, value, valid
+):
+    _, catalog, queue_dir, _, task = annotation_queue
+    catalog = catalog.model_copy(
+        update={
+            "fields": [
+                field.model_copy(update={"kql_type": kind})
+                if field.name == "AttemptCount"
+                else field
+                for field in catalog.fields
+            ]
+        }
+    )
+    decision = decision_factory(task, "constant-check", "alice", field="AttemptCount")
+    decision.expected.asim_fields[0].constant_value = value
+    path = tmp_path / "decision.jsonl"
+    write_semantic_annotation_decisions(path, [decision])
+    output = tmp_path / "gold"
+
+    if valid:
+        assert (
+            promote_semantic_annotations(
+                queue_dir, path, output, catalog, allow_single_review=True
+            ).promoted_count
+            == 1
+        )
+    else:
+        with pytest.raises(SemanticAnnotationError, match="constant incompatible"):
+            promote_semantic_annotations(queue_dir, path, output, catalog, allow_single_review=True)
+        assert not output.exists()
+
+
 def test_promotion_rejects_catalogue_drift_and_unknown_cases(
     annotation_queue,
     decision_factory,

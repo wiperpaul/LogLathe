@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from collections.abc import Iterable
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -253,11 +255,28 @@ def _validate_constant_value(
     elif kql_type == "bool":
         type_matches = isinstance(value, bool)
     elif kql_type in {"int", "long"}:
-        type_matches = isinstance(value, int) and not isinstance(value, bool)
+        bits = 32 if kql_type == "int" else 64
+        type_matches = (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and -(2 ** (bits - 1)) <= value < 2 ** (bits - 1)
+        )
     elif kql_type in {"real", "double"}:
-        type_matches = isinstance(value, (int, float)) and not isinstance(value, bool)
+        try:
+            type_matches = (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+            )
+        except OverflowError:
+            type_matches = False
     else:
         type_matches = False
+    if kql_type == "datetime" and isinstance(value, str):
+        try:
+            datetime.fromisoformat(value)
+        except ValueError:
+            type_matches = False
     if not type_matches:
         raise SemanticAnnotationError(
             f"Decision {decision_id!r} uses a constant incompatible with "
