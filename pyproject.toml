@@ -65,4 +65,5 @@ select = ["E", "F", "I", "UP"]
 testpaths = ["tests"]
 addopts = "-q --cov=src/asim_forge --cov-report=term-missing"
 
-[tool.ty]
+[tool.ty.src]
+include = ["src", "tests"]
