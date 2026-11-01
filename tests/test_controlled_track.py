@@ -102,6 +102,23 @@ def test_direction_swap_reverses_the_template_prepositions() -> None:
     assert words.index("to") < words.index("from")
 
 
+@pytest.mark.parametrize(("locator", "alias"), [("p1", "Src"), ("p2", "Dst")])
+def test_direction_swap_skips_multiple_targets_instead_of_breaking_robustness(locator, alias):
+    seed = _seed()
+    semantic = next(item for item in seed.expected.source_semantics if item.locator == locator)
+    original = next(
+        field for field in seed.expected.asim_fields if field.semantic_id == semantic.semantic_id
+    )
+    seed.expected.asim_fields.append(original.model_copy(update={"asim_field": alias}))
+    seed = SemanticMappingCase.model_validate(seed.model_dump(mode="json"))
+
+    assert perturb_case(seed, "swapped-direction") is None
+    report = run_robustness([seed], build_catalog(), ["direct-lexical"])
+    assert report.rows
+    assert all(row.perturbation != "swapped-direction" for row in report.rows)
+    assert any("swapped-direction" in warning for warning in report.warnings)
+
+
 def test_abbreviation_leaves_constant_locators_resolvable() -> None:
     seed = _seed()
     variant = perturb_case(seed, "abbreviated")

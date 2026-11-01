@@ -322,26 +322,11 @@ def _resampled_replicates(
         predictions: list[SemanticMappingPrediction] = []
         for group in drawn:
             for case, prediction in group:
-                cases.append(case)
-                predictions.append(prediction)
-        yield _deduplicate(cases, predictions)
-
-
-def _deduplicate(
-    cases: list[SemanticMappingCase],
-    predictions: list[SemanticMappingPrediction],
-) -> tuple[list[SemanticMappingCase], list[SemanticMappingPrediction]]:
-    """Metrics require unique IDs, but a redrawn family must still count more than once."""
-    seen: dict[str, int] = {}
-    unique_cases: list[SemanticMappingCase] = []
-    unique_predictions: list[SemanticMappingPrediction] = []
-    for case, prediction in zip(cases, predictions, strict=True):
-        count = seen.get(case.case_id, 0)
-        seen[case.case_id] = count + 1
-        case_id = case.case_id if count == 0 else f"{case.case_id}-r{count}"
-        unique_cases.append(case.model_copy(update={"case_id": case_id}))
-        unique_predictions.append(prediction.model_copy(update={"case_id": case_id}))
-    return unique_cases, unique_predictions
+                # Repeated occurrences must not collide with original case names.
+                case_id = f"resample-{len(cases)}"
+                cases.append(case.model_copy(update={"case_id": case_id}))
+                predictions.append(prediction.model_copy(update={"case_id": case_id}))
+        yield cases, predictions
 
 
 def _metric_without_identity(

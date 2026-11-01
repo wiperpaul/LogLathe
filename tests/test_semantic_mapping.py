@@ -18,6 +18,8 @@ from asim_forge.semantic_mapping.comparison import (
 )
 from asim_forge.semantic_mapping.contracts import (
     MappingRequest,
+    PredictedAsimField,
+    RankedFieldCandidate,
     SemanticMappingPrediction,
 )
 from asim_forge.semantic_mapping.field_ranking import (
@@ -187,6 +189,31 @@ def test_metrics_score_rankings_sets_exactness_and_edits_independently() -> None
     assert metrics.field_recall_at_gold == 0.25
     assert metrics.mapping_exact_match == 0
     assert metrics.mean_mapping_edits == 3
+
+
+@pytest.mark.parametrize(("score", "recall", "mrr"), [(0.8, 0.25, 0.25), (1.0, 0.0, 0.125)])
+def test_candidate_metrics_merge_shared_locators_without_depending_on_row_order(score, recall, mrr):
+    case = load_semantic_mapping_cases(EXAMPLE_CASES)[0]
+    prediction = SemanticMappingPrediction.model_validate(_prediction_payload())
+    extra = PredictedAsimField(
+        source_kind="slot",
+        locator="P1",
+        asim_field="DstIpAddr",
+        score=score,
+        ranked_candidates=[
+            RankedFieldCandidate(asim_field="DstIpAddr", score=score),
+            RankedFieldCandidate(asim_field="SrcIpAddr", score=0.7),
+        ],
+    )
+    prediction.asim_fields.append(extra)
+
+    metrics = evaluate_predictions([case], [prediction])
+    prediction.asim_fields.reverse()
+
+    assert evaluate_predictions([case], [prediction]) == metrics
+    assert metrics.candidate_recall_at_1 == recall
+    assert metrics.candidate_recall_at_3 == metrics.candidate_recall_at_5 == 0.25
+    assert metrics.field_mrr == mrr
 
 
 def test_metrics_require_predictions_for_the_exact_case_set() -> None:

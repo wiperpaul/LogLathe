@@ -130,6 +130,24 @@ def test_bootstrap_interval_collapses_when_every_family_agrees() -> None:
     assert field.group_count == 8
 
 
+def test_bootstrap_temporary_ids_cannot_collide_with_original_case_names() -> None:
+    families = _family_cases(2)
+    cases = [
+        families[0].model_copy(update={"case_id": "case"}),
+        families[0].model_copy(update={"case_id": "case-r1"}),
+        families[1].model_copy(update={"case_id": "other"}),
+    ]
+    predictions = _predict("semantic-frame", cases, build_catalog())
+
+    intervals = bootstrap_intervals(cases, predictions, resamples=20)
+
+    exact = next(interval for interval in intervals if interval.metric == "mapping_exact_match")
+    assert exact.point == exact.lower == exact.upper == 1.0
+    assert exact.group_count == 2
+    assert [case.case_id for case in cases] == ["case", "case-r1", "other"]
+    assert [prediction.case_id for prediction in predictions] == [case.case_id for case in cases]
+
+
 def test_bootstrap_interval_widens_when_families_disagree() -> None:
     catalog = build_catalog()
     cases = _family_cases(8)

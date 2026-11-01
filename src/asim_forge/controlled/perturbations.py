@@ -239,6 +239,9 @@ def _swap_source_destination(case: SemanticMappingCase) -> SemanticMappingCase |
     if rewrite(case.input.template) == case.input.template:
         return None
 
+    swapped_fields = _swapped_target_fields(case, source_label, destination_label)
+    if swapped_fields is None:
+        return None
     swapped_roles = {
         source_label.semantic_id: destination_label.role,
         destination_label.semantic_id: source_label.role,
@@ -249,7 +252,6 @@ def _swap_source_destination(case: SemanticMappingCase) -> SemanticMappingCase |
         else semantic
         for semantic in case.expected.source_semantics
     ]
-    swapped_fields = _swapped_target_fields(case, source_label, destination_label)
     fields = [
         field.model_copy(update={"asim_field": swapped_fields[field.semantic_id]})
         if field.semantic_id in swapped_fields
@@ -270,15 +272,23 @@ def _swapped_target_fields(
     case: SemanticMappingCase,
     source_label: SourceSemanticLabel,
     destination_label: SourceSemanticLabel,
-) -> dict[str, str]:
-    by_semantic = {field.semantic_id: field.asim_field for field in case.expected.asim_fields}
-    source_field = by_semantic.get(source_label.semantic_id)
-    destination_field = by_semantic.get(destination_label.semantic_id)
-    if source_field is None or destination_field is None:
-        return {}
+) -> dict[str, str] | None:
+    source_fields = [
+        field.asim_field
+        for field in case.expected.asim_fields
+        if field.semantic_id == source_label.semantic_id
+    ]
+    destination_fields = [
+        field.asim_field
+        for field in case.expected.asim_fields
+        if field.semantic_id == destination_label.semantic_id
+    ]
+    if len(source_fields) != 1 or len(destination_fields) != 1:
+        # shortcut: one target per side; extend when complete paired target sets are defined.
+        return None
     return {
-        source_label.semantic_id: destination_field,
-        destination_label.semantic_id: source_field,
+        source_label.semantic_id: destination_fields[0],
+        destination_label.semantic_id: source_fields[0],
     }
 
 
