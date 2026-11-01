@@ -412,6 +412,9 @@ uv run asim-forge compile artifacts/demo/clusters.jsonl artifacts/demo/mapping/p
 Use a new or empty output directory for each compilation. Existing outputs are
 preserved, and parser names must be unique across approved clusters, ignoring case.
 After changing a decision, choose a new output directory for the revised candidates.
+Cluster IDs must also be unique. Each parser can map at most 16 distinct extracted
+slots, matching Kusto's regex capture-group limit; constants and source/output
+column mappings do not count toward that limit.
 
 Only explicit mapping approvals generate candidates. Draft, deferred, and
 extraction-needed tasks are counted separately in the compile manifest. Approved

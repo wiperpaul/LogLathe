@@ -190,6 +190,9 @@ def _load_clusters(path: Path) -> list[ClusterRecord]:
     ]
     if not clusters:
         raise ReviewError(f"No cluster records found in {path}")
+    duplicates = _duplicates([cluster.cluster_id for cluster in clusters])
+    if duplicates:
+        raise ReviewError("Cluster IDs must be unique: " + ", ".join(duplicates))
     return clusters
 
 

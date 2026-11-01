@@ -931,6 +931,7 @@
           if (row.transform === 'datetime' && (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(row.constant_value) || !Number.isFinite(Date.parse(row.constant_value)))) return 'Use an ISO date or timestamp for ' + row.asim_field + '.';
         }
       }
+      if (assigned.size > 16) return 'Kusto supports at most 16 mapped slots per parser.';
       return null;
     }
     document.getElementById('ll-add').addEventListener('click', () => {

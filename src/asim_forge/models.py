@@ -115,6 +115,9 @@ def order_field_mappings(mappings: list[FieldMapping]) -> list[FieldMapping]:
     they refer to values from the source table before any mappings are applied.
     Among mappings whose dependencies are satisfied, retain the input order.
     """
+    mapped_slots = {mapping.slot_id for mapping in mappings if mapping.slot_id is not None}
+    if len(mapped_slots) > 16:
+        raise ValueError("Kusto supports at most 16 mapped slots per parser")
     by_name: dict[str, FieldMapping] = {}
     for mapping in mappings:
         name = mapping.asim_field.casefold()
