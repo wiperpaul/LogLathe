@@ -9,6 +9,8 @@ from ..catalog import load_catalog
 from ..reference.comparison import compare_captures
 from ..reference.execution import KustoClient, capture, load_capture, verify_capture, write_capture
 from ..reference.fixtures import canonical, load_fixture, reference_program
+from ..reference.inventory import DEFAULT_SCHEMAS, build_inventory
+from ..reference.inventory_report import write_inventory
 from ..reference.workflow import load_bundle, prepare
 
 
@@ -57,9 +59,54 @@ def register_reference_parser(
     compare.add_argument("--candidate-capture", type=Path, required=True)
     compare.add_argument("--catalog", type=Path, required=True)
     compare.add_argument("--output", type=Path, required=True)
+    inventory = commands.add_parser(
+        "inventory",
+        help="Statically pair upstream ASIM samples with parsers, without executing them",
+    )
+    inventory.add_argument(
+        "--revision",
+        default="master",
+        help="Azure-Sentinel commit, branch, or tag; the resolved commit SHA is recorded",
+    )
+    inventory.add_argument("--schema", nargs="+", default=list(DEFAULT_SCHEMAS))
+    inventory.add_argument(
+        "--cache",
+        type=Path,
+        default=Path("artifacts/corpus-cache"),
+        help="Shared SHA-256 download cache",
+    )
+    inventory.add_argument(
+        "--fixtures",
+        type=Path,
+        default=Path("evaluation/reference"),
+        help="Reference fixtures to cross-reference",
+    )
+    inventory.add_argument(
+        "--corpora",
+        type=Path,
+        default=Path("evaluation/corpora"),
+        help="Registered corpora to cross-reference",
+    )
+    inventory.add_argument("--output", type=Path, required=True)
 
 
 def run_reference_command(args: argparse.Namespace) -> None:
+    if args.reference_command == "inventory":
+        result = build_inventory(
+            revision=args.revision,
+            cache_dir=args.cache,
+            schemas=args.schema,
+            fixtures_dir=args.fixtures,
+            corpora_dir=args.corpora,
+        )
+        data_path, report_path = write_inventory(result, args.output)
+        ready = sum(pairing.status == "ready" for pairing in result.pairings)
+        print(
+            f"Inventoried {len(result.parsers)} source parsers and {len(result.samples)} samples "
+            f"at {result.revision}: {len(result.pairings)} pairings, {ready} ready."
+        )
+        print(f"Wrote {data_path} and {report_path}; static analysis only, nothing executed.")
+        return
     if args.reference_command == "prepare":
         bundle = prepare(args.fixture, args.output)
         print(

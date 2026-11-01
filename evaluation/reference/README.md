@@ -12,7 +12,10 @@ use `4fc25fd4c008337dfd6d9c5663be833e66575d53`. All use the existing catalogue p
 `027a0f9338bfabcb27b784571b771c54572ebf01` and matching schema versions. Each directory includes
 resource hashes, the upstream MIT licence, and a checked native Kusto capture.
 They reuse the [reference workflow](../../docs/reference-pilot.md); normal tests
-verify captures offline without Docker, downloads, or a provider key.
+verify captures offline without Docker, downloads, or a provider key. The
+[ASIM sample inventory](../../docs/research/asim-sample-inventory.md) identifies
+further upstream sample and parser pairs that could become fixtures, and the
+pinned parsers and samples that have since changed or disappeared upstream.
 
 ## Frozen fixture split
 

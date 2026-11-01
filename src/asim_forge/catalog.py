@@ -6,25 +6,21 @@ import csv
 import hashlib
 import io
 import json
-import os
-import re
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
-from urllib.parse import quote
-from urllib.request import Request, urlopen
 
 from pydantic import ValidationError
 
+from . import azure_sentinel
+from .azure_sentinel import FetchBytes, UpstreamError
 from .models import AsimCatalog, AsimCatalogField, AsimCatalogManifest, AsimFieldClass
 
-SOURCE_REPOSITORY = "https://github.com/Azure/Azure-Sentinel"
+SOURCE_REPOSITORY = azure_sentinel.REPOSITORY_URL
 SOURCE_PATH = "ASIM/dev/ASimTester/ASimTester.csv"
 CATALOG_FILE = "asim-catalog.csv"
 MANIFEST_FILE = "catalog-manifest.json"
 DEFAULT_REVISION = "master"
 
-_COMMIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 _EXPECTED_COLUMNS = {
     "ColumnName",
     "ColumnType",
@@ -36,8 +32,6 @@ _EXPECTED_COLUMNS = {
     "DynamicType",
     "ArrayValuesType",
 }
-
-FetchBytes = Callable[[str], bytes]
 
 
 class CatalogError(ValueError):
@@ -51,11 +45,13 @@ def sync_catalog(
     fetch_bytes: FetchBytes | None = None,
 ) -> AsimCatalogManifest:
     """Resolve an upstream ref, retrieve the official CSV, and cache an immutable snapshot."""
-    fetch = fetch_bytes or _fetch_bytes
-    requested_revision = _validate_revision(revision)
-    resolved_revision = _resolve_revision(requested_revision, fetch)
-    source_url = _raw_catalog_url(resolved_revision)
-    content = fetch(source_url)
+    fetch = fetch_bytes or azure_sentinel.fetch_bytes
+    try:
+        requested_revision = azure_sentinel.validate_revision(revision)
+        resolved_revision = azure_sentinel.resolve_revision(requested_revision, fetch)
+        content = fetch(azure_sentinel.raw_url(resolved_revision, SOURCE_PATH))
+    except UpstreamError as error:
+        raise CatalogError(f"Could not retrieve the ASIM catalogue: {error}") from error
     fields = _parse_catalog(content)
     schemas = sorted({field.schema_name for field in fields if field.schema_name != "Common"})
     if not schemas or not any(field.schema_name == "Common" for field in fields):
@@ -103,49 +99,6 @@ def load_catalog(snapshot_dir: Path) -> AsimCatalog:
     if len(fields) != manifest.field_count or schemas != manifest.schemas:
         raise CatalogError("ASIM catalogue contents do not match the manifest counts")
     return AsimCatalog(manifest=manifest, fields=fields)
-
-
-def _validate_revision(revision: str) -> str:
-    revision = revision.strip()
-    if not revision or any(character.isspace() for character in revision):
-        raise CatalogError("ASIM catalogue revision cannot be empty or contain whitespace")
-    return revision
-
-
-def _resolve_revision(revision: str, fetch: FetchBytes) -> str:
-    if _COMMIT_SHA.fullmatch(revision):
-        return revision.lower()
-    url = f"https://api.github.com/repos/Azure/Azure-Sentinel/commits/{quote(revision, safe='')}"
-    try:
-        payload: Any = json.loads(fetch(url).decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeError) as error:
-        raise CatalogError(
-            f"Could not resolve Azure-Sentinel revision {revision!r}: {error}"
-        ) from error
-    resolved = payload.get("sha") if isinstance(payload, dict) else None
-    if not isinstance(resolved, str) or not _COMMIT_SHA.fullmatch(resolved):
-        raise CatalogError(f"Azure-Sentinel revision {revision!r} did not resolve to a commit SHA")
-    return resolved.lower()
-
-
-def _raw_catalog_url(revision: str) -> str:
-    return f"https://raw.githubusercontent.com/Azure/Azure-Sentinel/{revision}/{SOURCE_PATH}"
-
-
-def _fetch_bytes(url: str) -> bytes:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "ASIM-Forge",
-    }
-    token = os.environ.get("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    request = Request(url, headers=headers)
-    try:
-        with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed trusted hosts
-            return bytes(response.read())
-    except OSError as error:
-        raise CatalogError(f"Could not retrieve the ASIM catalogue from {url}: {error}") from error
 
 
 def _parse_catalog(content: bytes) -> list[AsimCatalogField]:
