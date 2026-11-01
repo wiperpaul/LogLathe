@@ -63,6 +63,7 @@ def test_mixed_native_evidence_covers_every_selected_fixture_input(name):
     [
         ("mixed-split.json", {"train": 1, "validation": 3, "test": 3}),
         ("expanded-split.json", {"train": 1, "validation": 6, "test": 5}),
+        ("inventory-split.json", {"train": 1, "validation": 11, "test": 4}),
     ],
 )
 def test_fixture_split_covers_every_source_once_and_keeps_product_schemas_together(
@@ -73,7 +74,7 @@ def test_fixture_split_covers_every_source_once_and_keeps_product_schemas_togeth
     by_id = {fixture.fixture_id: fixture for fixture in fixtures}
     selected = {entry.case_id for entry in split.entries}
     assert selected <= set(by_id)
-    if filename == "expanded-split.json":
+    if filename == "inventory-split.json":
         assert set(by_id) == selected
     counts = Counter()
     for entry in split.entries:

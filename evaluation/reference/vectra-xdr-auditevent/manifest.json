@@ -1,0 +1,72 @@
+{
+  "format_version": "2",
+  "fixture_id": "vectra-xdr-auditevent-v1",
+  "track": "asim-parser-silver",
+  "group_id": "vectra-xdr",
+  "source_revision": "2985095e602f32c493e43998856ac9bcf1382afd",
+  "catalogue_revision": "027a0f9338bfabcb27b784571b771c54572ebf01",
+  "schema_name": "AuditEvent",
+  "schema_version": "0.1.0",
+  "source_table": "Audits_Data_CL",
+  "message_field": "Message",
+  "vendor": "Vectra",
+  "product": "XDR",
+  "csv_file": "source.csv",
+  "parser_file": "parser.yaml",
+  "helpers": [],
+  "columns": {
+    "TenantId": "string",
+    "SourceSystem": "string",
+    "MG": "string",
+    "ManagementGroupName": "string",
+    "TimeGenerated": "datetime",
+    "Computer": "string",
+    "RawData": "string",
+    "api_client_id_g": "string",
+    "id_d": "real",
+    "user_id_d": "real",
+    "username_s": "string",
+    "user_type_s": "string",
+    "user_role_s": "string",
+    "version_s": "string",
+    "source_ip_s": "string",
+    "event_timestamp_t": "datetime",
+    "Message": "string",
+    "result_status_s": "string",
+    "event_data_s": "string",
+    "event_object_s": "string",
+    "event_action_s": "string",
+    "Type": "string",
+    "_ResourceId": "string"
+  },
+  "csv_column_names": {
+    "TimeGenerated": "TimeGenerated [UTC]",
+    "event_timestamp_t": "event_timestamp_t [UTC]"
+  },
+  "datetime_format": "%m/%d/%Y, %I:%M:%S.%f %p",
+  "resources": [
+    {
+      "file": "source.csv",
+      "source_path": "Sample Data/ASIM/Vectra XDR/Vectra_Vectra XDR_ASimAuditEventVectraXDRAudit_IngestedLogs.csv",
+      "sha256": "c07308b032f7956d372f12c3233119ade223987b766734d1b27bc70bc041fcae"
+    },
+    {
+      "file": "parser.yaml",
+      "source_path": "Parsers/ASimAuditEvent/Parsers/ASimAuditEventVectraXDRAudit.yaml",
+      "sha256": "b813c3e9270a2863118a109855ce9ba71f2bebe768f1bab666e7fdba6565845f"
+    },
+    {
+      "file": "source-table-schema.csv",
+      "source_path": "Sample Data/ASIM/Vectra XDR/Audits_Data_CL_schema.csv",
+      "sha256": "1f9f08a5cbca625300d2cd8b4e00561396323ed421be60d712fc531d6b993252"
+    },
+    {
+      "file": "LICENSE.upstream",
+      "source_path": "LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    }
+  ],
+  "redistribution": "content",
+  "attribution": "Microsoft Azure-Sentinel, MIT licence. Public parser-development samples; no independent semantic adjudication.",
+  "mutation_suite": "none"
+}
