@@ -354,3 +354,43 @@ def test_all_slots_are_extracted_before_the_message_column_is_overwritten() -> N
     extraction = kql.index("| extend _asim_forge_p1 = extract(")
     assert ", 1, EventMessage)" in kql
     assert extraction < kql.index('EventMessage = tostring("normalized message")')
+
+
+@pytest.mark.parametrize("count", [16, 17])
+def test_compilation_enforces_kusto_capture_group_limit(count: int) -> None:
+    specification = _specification(
+        [
+            FieldMapping(slot_id=f"p{index}", asim_field=f"Field{index}")
+            for index in range(1, count + 1)
+        ]
+    )
+    specification.template = " ".join("<VAR:TEXT>" for _ in range(count))
+
+    if count == 17:
+        with pytest.raises(ReviewError, match="at most 16 mapped slots"):
+            compile_kql(specification)
+    else:
+        assert "Field16 = tostring(_asim_forge_p16)" in compile_kql(specification)
+
+
+def test_source_columns_do_not_count_towards_the_capture_limit() -> None:
+    mappings = [
+        FieldMapping(source_field=f"Input{index}", asim_field=f"Field{index}")
+        for index in range(20)
+    ]
+    assert order_field_mappings(mappings) == mappings
+
+
+def test_duplicate_cluster_ids_are_rejected_before_compilation(tmp_path: Path) -> None:
+    clusters = tmp_path / "clusters.jsonl"
+    cluster = _write_cluster(clusters)
+    duplicate = cluster.model_copy(update={"template": "Different <VAR:TEXT> from <VAR:IPV4>"})
+    clusters.write_text(cluster.model_dump_json() + "\n" + duplicate.model_dump_json() + "\n")
+    reviews = tmp_path / "reviews.jsonl"
+    reviews.write_text(json.dumps(_review(cluster.cluster_id)))
+    output = tmp_path / "compiled"
+
+    with pytest.raises(ReviewError, match="Cluster IDs must be unique"):
+        compile_reviews(clusters, reviews, output)
+
+    assert not output.exists()
