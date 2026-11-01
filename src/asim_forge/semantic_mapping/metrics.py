@@ -275,27 +275,29 @@ def _field_reciprocal_ranks(
     prediction: SemanticMappingPrediction,
 ) -> list[float]:
     semantics = {semantic.semantic_id: semantic for semantic in case.expected.source_semantics}
+    retained = _ranked_fields_by_source(prediction)
     ranks: list[float] = []
     for expected in case.expected.asim_fields:
         source = semantics[expected.semantic_id]
-        candidate_scores: dict[str, float] = {}
-        for predicted in prediction.asim_fields:
-            if (
-                predicted.source_kind != source.source_kind
-                or predicted.locator.casefold() != source.locator.casefold()
-            ):
-                continue
-            for candidate in predicted.ranked_candidates:
-                candidate_scores[candidate.asim_field] = max(
-                    candidate_scores.get(candidate.asim_field, 0.0),
-                    candidate.score,
-                )
-        names = sorted(
-            candidate_scores,
-            key=lambda name: (-candidate_scores[name], name),
-        )
+        names = retained.get((source.source_kind, source.locator.casefold()), [])
         ranks.append(_reciprocal_rank(expected.asim_field, names))
     return ranks
+
+
+def _ranked_fields_by_source(
+    prediction: SemanticMappingPrediction,
+) -> dict[tuple[str, str], list[str]]:
+    scores: dict[tuple[str, str], dict[str, float]] = {}
+    for field in prediction.asim_fields:
+        candidates = scores.setdefault((field.source_kind, field.locator.casefold()), {})
+        for candidate in field.ranked_candidates:
+            candidates[candidate.asim_field] = max(
+                candidates.get(candidate.asim_field, 0.0), candidate.score
+            )
+    return {
+        source: sorted(candidates, key=lambda name: (-candidates[name], name))
+        for source, candidates in scores.items()
+    }
 
 
 def _candidate_hits(
@@ -304,12 +306,7 @@ def _candidate_hits(
 ) -> dict[int, int]:
     """Count expected fields retained by candidate generation at each cut-off."""
     semantics = {semantic.semantic_id: semantic for semantic in case.expected.source_semantics}
-    retained: dict[tuple[str, str], list[str]] = {
-        (field.source_kind, field.locator.casefold()): [
-            candidate.asim_field for candidate in field.ranked_candidates
-        ]
-        for field in prediction.asim_fields
-    }
+    retained = _ranked_fields_by_source(prediction)
     hits = {1: 0, 3: 0, 5: 0}
     for expected in case.expected.asim_fields:
         source = semantics[expected.semantic_id]

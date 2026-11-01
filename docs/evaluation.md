@@ -191,6 +191,8 @@ synthetic case sets.
 The metric engine evaluates predictions from exactly one approach name and version
 at a time. Predictions must cover the evaluated case IDs exactly and must carry
 the same immutable catalogue revision as their cases.
+Candidate rankings sharing a source locator are merged using each field's highest
+score, with field names breaking ties consistently for rank and recall metrics.
 
 | Metric | Definition |
 | --- | --- |
@@ -284,6 +286,8 @@ for that transformation. A transformation that applies to no seed case is unmeas
 a pass. Generated variants are synthetic by construction and must never be
 averaged into real-case headline metrics. The corpus benchmark runs these slices
 automatically for each semantic corpus and keeps them in a separate section.
+Direction swapping applies only when each paired source meaning has exactly one
+target field; cases with additional alias projections are skipped for that slice.
 
 ## Benchmark tracks and corpora
 
