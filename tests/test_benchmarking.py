@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from urllib.error import HTTPError
 
 import pytest
+from semantic_fixtures import EXAMPLE_CASES, build_catalog
 
 from asim_forge import benchmarking, cli
 from asim_forge.benchmarking import (
@@ -29,6 +30,7 @@ from asim_forge.benchmarking import (
     run_benchmarks,
 )
 from asim_forge.commands import evaluation as evaluation_command
+from asim_forge.evaluation import SemanticMappingCase, load_semantic_mapping_cases
 
 
 @pytest.mark.parametrize("track", ["semantic-gold", "semantic-development"])
@@ -421,7 +423,11 @@ def test_semantic_corpus_uses_the_shared_comparison_contract(
     )
     monkeypatch.setattr(benchmarking, "load_catalog", lambda path: catalog)
     monkeypatch.setattr(benchmarking, "load_semantic_mapping_cases", lambda path: [object()])
-    monkeypatch.setattr(benchmarking, "_robustness_rows", lambda corpus, cases, cat: [])
+    monkeypatch.setattr(
+        benchmarking,
+        "_controlled_robustness",
+        lambda corpus, cases, cat: ([], [f"{corpus}/robustness: swapped-direction unmeasured"]),
+    )
     monkeypatch.setattr(
         benchmarking,
         "compare_approaches",
@@ -445,7 +451,10 @@ def test_semantic_corpus_uses_the_shared_comparison_contract(
     assert report.catalogue_revision == "a" * 40
     assert report.results[0].track == track
     assert report.results[0].metrics["field_micro_f1"] == 0.75
-    assert report.warnings == ["semantic/test-approach: small fixture"]
+    assert report.warnings == [
+        "semantic/test-approach: small fixture",
+        "semantic/robustness: swapped-direction unmeasured",
+    ]
     markdown = (tmp_path / "output" / "benchmark-report.md").read_text(encoding="utf-8")
     gold_section, development_section = markdown.split("### Checked development labels", 1)
     gold_section = gold_section.split("### Semantic gold and contract fixtures", 1)[1]
@@ -453,6 +462,28 @@ def test_semantic_corpus_uses_the_shared_comparison_contract(
     other_section = development_section if track == "semantic-gold" else gold_section
     assert "Semantic corpus" in expected_section
     assert "Semantic corpus" not in other_section
+
+
+def test_controlled_robustness_names_unmeasured_families_per_corpus() -> None:
+    """A family with no applicable seed has no row, so the gap must be a warning."""
+    data = load_semantic_mapping_cases(EXAMPLE_CASES)[0].model_dump(mode="json")
+
+    def keyed(text: str) -> str:
+        return text.replace(" from ", " src ").replace(" to ", " dst ")
+
+    data["input"]["template"] = keyed(data["input"]["template"])
+    for event in data["input"]["representative_events"]:
+        event["text"] = keyed(event["text"])
+    case = SemanticMappingCase.model_validate(data)
+
+    rows, warnings = benchmarking._controlled_robustness("corpus", [case], build_catalog())
+
+    assert rows
+    assert all(row.perturbation != "swapped-direction" for row in rows)
+    assert [warning for warning in warnings if "swapped-direction" in warning] == [
+        "corpus/robustness: swapped-direction: no seed case could be perturbed; "
+        "the family is unmeasured rather than passing."
+    ]
 
 
 def test_semantic_benchmark_verifies_frozen_groups_before_split_comparison(
@@ -504,7 +535,7 @@ def test_semantic_benchmark_verifies_frozen_groups_before_split_comparison(
     )
     monkeypatch.setattr(benchmarking, "load_catalog", lambda path: catalog)
     monkeypatch.setattr(benchmarking, "load_semantic_mapping_cases", lambda path: [object()])
-    monkeypatch.setattr(benchmarking, "_robustness_rows", lambda corpus, cases, cat: [])
+    monkeypatch.setattr(benchmarking, "_controlled_robustness", lambda corpus, cases, cat: ([], []))
     monkeypatch.setattr(benchmarking, "load_semantic_dataset_split", lambda path: split)
     monkeypatch.setattr(
         benchmarking,

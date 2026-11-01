@@ -333,7 +333,11 @@ def run_benchmarks(
                         minimum_detectable_effect=comparison.sample.minimum_detectable_effect,
                     )
                 )
-            robustness.extend(_robustness_rows(manifest.corpus_id, cases, catalog))
+            corpus_robustness, robustness_warnings = _controlled_robustness(
+                manifest.corpus_id, cases, catalog
+            )
+            robustness.extend(corpus_robustness)
+            warnings.extend(robustness_warnings)
             continue
 
         with tempfile.TemporaryDirectory(prefix="asim-forge-benchmark-") as temporary:
@@ -466,14 +470,17 @@ def parsing_metrics(predicted: list[int], gold: list[str]) -> dict[str, float | 
     }
 
 
-def _robustness_rows(
+def _controlled_robustness(
     corpus_id: str,
     cases: list[SemanticMappingCase],
     catalog: AsimCatalog,
-) -> list[RobustnessSummary]:
-    """Controlled perturbation results, kept out of the headline metrics."""
+) -> tuple[list[RobustnessSummary], list[str]]:
+    """Controlled perturbation results, kept out of the headline metrics.
+
+    Warnings name unmeasured families so a missing row is not read as a pass.
+    """
     report = run_robustness(cases, catalog)
-    return [
+    rows = [
         RobustnessSummary(
             corpus_id=corpus_id,
             approach=row.approach,
@@ -487,6 +494,7 @@ def _robustness_rows(
         )
         for row in report.rows
     ]
+    return rows, [f"{corpus_id}/robustness: {warning}" for warning in report.warnings]
 
 
 def write_benchmark_report(output_dir: Path, report: BenchmarkReport) -> None:

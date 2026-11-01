@@ -3,7 +3,7 @@
 Status: current
 Audience: evaluators, approach developers, and release operators
 Canonical for: approaches, metrics, controlled conditions, corpora, and evaluation reports
-Last verified: 2026-10-03
+Last verified: 2026-11-01
 
 This is the canonical operator and metric reference for LogLathe evaluation. It
 covers semantic-mapping comparisons, controlled robustness, and the registered
@@ -285,9 +285,28 @@ pass/fail verdict. Each baseline includes only the seed cases that produced vari
 for that transformation. A transformation that applies to no seed case is unmeasured, not
 a pass. Generated variants are synthetic by construction and must never be
 averaged into real-case headline metrics. The corpus benchmark runs these slices
-automatically for each semantic corpus and keeps them in a separate section.
-Direction swapping applies only when each paired source meaning has exactly one
-target field; cases with additional alias projections are skipped for that slice.
+automatically for each semantic corpus and keeps them in a separate section; a
+family that applies to none of a corpus's seeds is listed as a `<corpus>/robustness`
+warning instead of a row.
+
+Every variant remains valid evidence for its own template. Prose rewrites change
+template text outside placeholders and then rebuild each representative event from
+the seed's original slot captures, so whitespace and captured values are unchanged.
+A seed whose events do not align with its template, or a rewrite that leaves the
+template unchanged, produces no variant. The decoy slot draws its event values from
+its own examples.
+
+Direction swapping needs explicit direction wording. It exchanges a `from`
+directly before a source slot with a `to` directly before that slot's destination
+counterpart, and swaps their labels. It skips a case when:
+
+- No such `from`/`to` pair exists. Key-value formats such as CEF `src=`/`dst=` are
+  therefore unmeasured for this slice.
+- A paired source meaning has more than one target field, such as an alias
+  projection.
+- Another directional slot takes its direction only from surrounding words, as the
+  port does in `from <ip> port <n> to <ip>`. Swapping would silently invalidate
+  that slot's label.
 
 ## Benchmark tracks and corpora
 

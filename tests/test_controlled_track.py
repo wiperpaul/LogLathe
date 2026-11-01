@@ -1,3 +1,7 @@
+import re
+from collections import Counter
+from pathlib import Path
+
 import pytest
 from semantic_fixtures import EXAMPLE_CASES, build_catalog
 
@@ -11,6 +15,15 @@ from asim_forge.controlled import (
 )
 from asim_forge.controlled.robustness import ROBUSTNESS_APPROACH_NAMES
 from asim_forge.evaluation import SemanticMappingCase, load_semantic_mapping_cases
+from asim_forge.potato_bundle import example_slot_spans
+
+SEED_FIXTURES = (EXAMPLE_CASES, Path("evaluation/corpora/asim-cef-dev/cases.jsonl"))
+NETWORK_MEANINGS = {
+    "source.address": ("IPV4", "SrcIpAddr"),
+    "destination.address": ("IPV4", "DstIpAddr"),
+    "source.port": ("NUMBER", "SrcPortNumber"),
+    "destination.port": ("NUMBER", "DstPortNumber"),
+}
 
 LABEL_PRESERVING = tuple(
     definition.name for definition in perturbations() if definition.family == "label-preserving"
@@ -22,6 +35,97 @@ LABEL_CHANGING = tuple(
 
 def _seed() -> SemanticMappingCase:
     return load_semantic_mapping_cases(EXAMPLE_CASES)[0]
+
+
+def _all_seeds() -> list[SemanticMappingCase]:
+    return [case for path in SEED_FIXTURES for case in load_semantic_mapping_cases(path)]
+
+
+def _captures(case: SemanticMappingCase) -> list[list[str]]:
+    spans = example_slot_spans(
+        case.input.template, case.input.representative_events, case.input.parameter_slots
+    )
+    return [[span["text"] for span in event] for event in spans]
+
+
+def _example_mismatches(case: SemanticMappingCase) -> set[str]:
+    """Slots whose recorded examples match none of the values the events capture."""
+    captures = _captures(case)
+    return {
+        slot.slot_id
+        for index, slot in enumerate(case.input.parameter_slots)
+        if not set(slot.examples) & {event[index] for event in captures if event}
+    }
+
+
+def _network_case(template: str, slots: list[tuple[str, str]]) -> SemanticMappingCase:
+    """A one-event case whose slots carry ``(meaning, value)`` pairs in template order.
+
+    The event is rendered from the template, and the seed's ``connection allowed``
+    constant is kept, so ``template`` must contain that phrase.
+    """
+    data = _seed().model_dump(mode="json")
+    expected = data["expected"]
+    constants = [
+        item for item in expected["source_semantics"] if item["source_kind"] == "template_constant"
+    ]
+    constant_ids = {item["semantic_id"] for item in constants}
+    constant_fields = [
+        field for field in expected["asim_fields"] if field["semantic_id"] in constant_ids
+    ]
+    slot_evidence = expected["source_semantics"][0]["evidence"]
+    field_evidence = expected["asim_fields"][0]["evidence"]
+
+    occurrences: Counter[str] = Counter()
+    parameter_slots, semantics, fields = [], [], []
+    for number, (meaning, value) in enumerate(slots, start=1):
+        label, asim_field = NETWORK_MEANINGS[meaning]
+        occurrences[label] += 1
+        slot_id = f"p{number}"
+        parameter_slots.append(
+            {
+                "slot_id": slot_id,
+                "label": label,
+                "placeholder": f"<VAR:{label}>",
+                "occurrence": occurrences[label],
+                "examples": [value],
+            }
+        )
+        semantics.append(
+            {
+                "semantic_id": meaning,
+                "source_kind": "slot",
+                "locator": slot_id,
+                "role": f"network.{meaning}",
+                "evidence": slot_evidence,
+            }
+        )
+        fields.append(
+            {
+                "semantic_id": meaning,
+                "asim_field": asim_field,
+                "constant_value": None,
+                "evidence": field_evidence,
+            }
+        )
+
+    values = iter(value for _meaning, value in slots)
+    data["input"]["template"] = template
+    data["input"]["parameter_slots"] = parameter_slots
+    data["input"]["representative_events"] = [
+        {
+            "source_file": "test.log",
+            "line_number": 1,
+            "text": re.sub(r"<VAR:[A-Z0-9_]+>", lambda _match: next(values), template),
+        }
+    ]
+    expected["source_semantics"] = semantics + constants
+    expected["asim_fields"] = fields + constant_fields
+    return SemanticMappingCase.model_validate(data)
+
+
+ADDRESSES = [("source.address", "10.0.0.4"), ("destination.address", "192.0.2.10")]
+ADDRESSES_AND_PORT = [*ADDRESSES, ("destination.port", "443")]
 
 
 def _expected_pairs(case: SemanticMappingCase) -> set[tuple[str, str]]:
@@ -100,6 +204,124 @@ def test_direction_swap_reverses_the_template_prepositions() -> None:
 
     words = variant.case.input.template.split()
     assert words.index("to") < words.index("from")
+
+
+@pytest.mark.parametrize("name", perturbation_names())
+def test_every_fixture_variant_keeps_its_events_aligned(name: str) -> None:
+    """Variants must stay valid evidence: events still match, with the seed's captures."""
+    for seed in _all_seeds():
+        variant = perturb_case(seed, name)
+        if variant is None:
+            continue
+        captures = _captures(variant.case)
+        assert all(captures), (seed.case_id, variant.case.input.template)
+        if name != "decoy-slot":
+            assert captures == _captures(seed), seed.case_id
+        assert _example_mismatches(variant.case) <= _example_mismatches(seed), seed.case_id
+
+
+def test_direction_swap_only_applies_where_the_text_states_direction() -> None:
+    applied = [
+        seed.case_id for seed in _all_seeds() if perturb_case(seed, "swapped-direction") is not None
+    ]
+
+    assert applied == ["demo.network.allowed"]
+
+
+def test_compound_rewrites_template_and_events_together() -> None:
+    variant = perturb_case(_seed(), "compound")
+    assert variant is not None
+
+    assert "destinationPort <VAR:NUMBER>" in variant.case.input.template
+    for event in variant.case.input.representative_events:
+        assert "destinationPort " in event.text
+
+
+def test_uppercase_changes_prose_but_not_captured_values() -> None:
+    seed = _network_case(
+        "Gateway connection allowed from host <VAR:IPV4> to <VAR:IPV4>",
+        [("source.address", "host-a.example"), ("destination.address", "192.0.2.10")],
+    )
+
+    variant = perturb_case(seed, "uppercase")
+    assert variant is not None
+
+    assert variant.case.input.representative_events[0].text == (
+        "GATEWAY CONNECTION ALLOWED FROM HOST host-a.example TO 192.0.2.10"
+    )
+    assert _captures(variant.case) == _captures(seed)
+
+
+def test_whitespace_is_preserved_by_prose_rewrites() -> None:
+    seed = _network_case(
+        "MAR  1 gateway connection allowed from <VAR:IPV4> to <VAR:IPV4>", ADDRESSES
+    )
+
+    variant = perturb_case(seed, "abbreviated")
+    assert variant is not None
+
+    assert variant.case.input.template.startswith("MAR  1 gw connection")
+    assert variant.case.input.representative_events[0].text.startswith("MAR  1 gw connection")
+
+
+def test_syslog_priority_is_not_mistaken_for_a_placeholder() -> None:
+    seed = _network_case(
+        "<134>gateway connection allowed from <VAR:IPV4> to <VAR:IPV4> "
+        "destination port <VAR:NUMBER>",
+        ADDRESSES_AND_PORT,
+    )
+
+    for name in perturbation_names():
+        variant = perturb_case(seed, name)
+        assert variant is not None, name
+        assert all(_captures(variant.case)), name
+
+
+def test_direction_swap_skips_whitespace_only_differences() -> None:
+    """A CEF-style template with no direction words is unchanged, so nothing is swapped."""
+    seed = _network_case(
+        "<134>MAR  1 CEF connection allowed src=<VAR:IPV4> dst=<VAR:IPV4> dpt=<VAR:NUMBER>",
+        ADDRESSES_AND_PORT,
+    )
+
+    assert perturb_case(seed, "swapped-direction") is None
+
+
+def test_direction_swap_handles_each_from_to_pair() -> None:
+    seed = _network_case(
+        "connection allowed from <VAR:IPV4> to <VAR:IPV4> ports from <VAR:NUMBER> to <VAR:NUMBER>",
+        [*ADDRESSES, ("source.port", "51515"), ("destination.port", "443")],
+    )
+
+    variant = perturb_case(seed, "swapped-direction")
+    assert variant is not None
+
+    assert variant.case.input.template == (
+        "connection allowed to <VAR:IPV4> from <VAR:IPV4> ports to <VAR:NUMBER> from <VAR:NUMBER>"
+    )
+    assert dict(_expected_pairs(variant.case)) == {
+        "p1": "DstIpAddr",
+        "p2": "SrcIpAddr",
+        "p3": "DstPortNumber",
+        "p4": "SrcPortNumber",
+        "connection allowed": "EventResult",
+    }
+    assert _captures(variant.case) == _captures(seed)
+
+
+def test_direction_swap_skips_slots_whose_direction_comes_from_context() -> None:
+    """Swapping the addresses here would leave the source port reading as a source."""
+    seed = _network_case(
+        "connection allowed from <VAR:IPV4> port <VAR:NUMBER> to <VAR:IPV4> port <VAR:NUMBER>",
+        [
+            ("source.address", "10.0.0.4"),
+            ("source.port", "51515"),
+            ("destination.address", "192.0.2.10"),
+            ("destination.port", "443"),
+        ],
+    )
+
+    assert perturb_case(seed, "swapped-direction") is None
 
 
 @pytest.mark.parametrize(("locator", "alias"), [("p1", "Src"), ("p2", "Dst")])
@@ -219,6 +441,16 @@ def test_surface_only_changes_do_not_move_the_answer() -> None:
 def test_robustness_rejects_an_empty_seed_set() -> None:
     with pytest.raises(RobustnessError, match="At least one seed case"):
         run_robustness([], build_catalog())
+
+
+def test_robustness_rejects_an_empty_approach_list() -> None:
+    with pytest.raises(RobustnessError, match="At least one semantic mapping approach"):
+        run_robustness([_seed()], build_catalog(), [])
+
+
+def test_robustness_rejects_duplicate_approach_names() -> None:
+    with pytest.raises(RobustnessError, match="must be unique"):
+        run_robustness([_seed()], build_catalog(), ["direct-lexical", "direct-lexical"])
 
 
 def test_robustness_baseline_only_includes_cases_the_transformation_can_change() -> None:

@@ -83,9 +83,13 @@ def run_robustness(
     if not cases:
         raise RobustnessError("At least one seed case is required")
     names = list(ROBUSTNESS_APPROACH_NAMES if approach_names is None else approach_names)
+    if not names:
+        raise RobustnessError("At least one semantic mapping approach is required")
     unknown = sorted(set(names) - set(APPROACH_NAMES))
     if unknown:
         raise RobustnessError(f"Unknown semantic mapping approaches: {unknown}")
+    if len(names) != len(set(names)):
+        raise RobustnessError("Semantic mapping approach names must be unique")
     excluded = sorted(set(names) & EXCLUDED_APPROACH_NAMES)
     if excluded:
         raise RobustnessError(
