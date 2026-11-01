@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import re
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -12,6 +14,27 @@ ReviewStatus = Literal["approved", "rejected", "needs_split", "insufficient_evid
 Transform = Literal["string", "int", "long", "real", "datetime", "bool"]
 MappingReviewStatus = Literal["in_progress", "approved", "deferred", "needs_extraction"]
 TimeGeneratedMode = Literal["map", "source", "ingestion"]
+
+# Extended ISO 8601 only. `datetime.fromisoformat` also accepts week dates, basic
+# format, and arbitrary separators, and its rules vary across Python versions; the
+# mapping review page mirrors this pattern so both sides accept the same constants.
+_DATETIME_CONSTANT = re.compile(
+    r"(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})"
+    r"(?:T(?:[01][0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9](?:\.[0-9]{1,7})?)?"
+    r"(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?)?"
+)
+
+
+def is_datetime_constant(value: str) -> bool:
+    """Whether ``value`` is a real calendar date, optionally with a time and offset."""
+    match = _DATETIME_CONSTANT.fullmatch(value)
+    if match is None:
+        return False
+    try:
+        date.fromisoformat(match["date"])
+    except ValueError:
+        return False
+    return True
 
 
 class StrictModel(BaseModel):

@@ -3,7 +3,7 @@
 Status: current
 Audience: dataset curators, annotators, and evaluation maintainers
 Canonical for: mapping cases, evidence levels, annotation, promotion, grouping, and splits
-Last verified: 2026-10-03
+Last verified: 2026-11-01
 
 This is the canonical guide for turning reviewed Stage 1 clusters into
 provider-neutral semantic-mapping cases. It covers the case contract, evidence
@@ -78,7 +78,11 @@ Every ASIM projection must refer to a known source-semantic ID. Duplicate
 evidence citation. During promotion, schema and field names are checked against the
 pinned catalogue, and constant values are checked against field types and allowed
 values. Integer constants must fit the target's signed 32-bit or 64-bit range;
-real values must be finite, and datetime strings must parse as ISO dates or timestamps.
+real values must be finite, and datetime strings must be valid calendar dates in
+extended ISO 8601 form (`YYYY-MM-DD`), optionally followed by `THH:MM`, optional
+`:SS` with up to seven fractional digits, and an optional `Z` or `±HH:MM` offset.
+Promotion, mapping review, and the review page share this rule, so basic-format values
+such as `20260301`, week dates, and space-separated timestamps are rejected.
 Case provenance records one of `human_review`, `adjudicated`, `synthetic`,
 or `imported` plus any decision, annotator, and explanatory references.
 

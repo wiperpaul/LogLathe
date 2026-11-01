@@ -3,7 +3,7 @@
 Status: current
 Audience: security and detection engineers running the parser workflow
 Canonical for: build, cluster and mapping review, catalogue sync, compilation, and generated artifacts
-Last verified: 2026-10-29
+Last verified: 2026-11-01
 
 LogLathe's installed command is `asim-forge`. The distribution and CLI retain that
 name for compatibility with existing environments and artifacts.
@@ -277,8 +277,10 @@ blank. Omitting either list or using `[]` disables that list. Changing setup req
 a new bundle; existing frozen reviews and saved decisions retain their original
 behavior. Configured mappings cannot use
 template-specific slot IDs. Preparation checks field names, conversions, constant
-values, and known reference columns. Approval rejects incomplete or circular mapping
-dependencies.
+values, and known reference columns. Datetime constants follow the
+[mapping case contract](dataset-curation.md#semantic-mapping-case-contract) rule, for
+example `2026-03-01` or `2026-03-01T12:00:00Z`. Approval rejects incomplete or
+circular mapping dependencies.
 
 ASIM's [common-field guidance](https://learn.microsoft.com/en-us/azure/sentinel/normalization-common-fields)
 uses `1` for unaggregated events and `TimeGenerated` when start or end timestamps are

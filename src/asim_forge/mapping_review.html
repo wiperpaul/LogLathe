@@ -876,6 +876,15 @@
     }
     const notes = document.getElementById('ll-notes'); notes.value = draft.notes;
     notes.addEventListener('input', () => { draft.notes = notes.value; changed(); });
+    // Mirrors asim_forge.models.is_datetime_constant; tests run both on the same inputs.
+    function isDateTimeConstant(value) {
+      const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})(?:T(?:[01][0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9](?:\.[0-9]{1,7})?)?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?)?$/.exec(value);
+      if (!match) return false;
+      const [year, month, day] = match.slice(1, 4).map(Number);
+      const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+      const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+      return year >= 1 && days !== undefined && day >= 1 && day <= days;
+    }
     function validate() {
       if (draft.cluster_status !== 'approved') return 'Resolve the cluster review before approving its mappings.';
       if (!fieldsBySchema[draft.schema_name]) return 'Choose a supported ASIM schema.';
@@ -928,7 +937,7 @@
           }
           if (row.transform === 'real' && (!row.constant_value.trim() || !Number.isFinite(Number(row.constant_value)))) return 'Use a finite number for ' + row.asim_field + '.';
           if (row.transform === 'bool' && !['true', 'false'].includes(row.constant_value.toLowerCase())) return 'Use true or false for ' + row.asim_field + '.';
-          if (row.transform === 'datetime' && (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(row.constant_value) || !Number.isFinite(Date.parse(row.constant_value)))) return 'Use an ISO date or timestamp for ' + row.asim_field + '.';
+          if (row.transform === 'datetime' && !isDateTimeConstant(row.constant_value)) return 'Use an ISO date or timestamp, such as 2026-03-01 or 2026-03-01T12:00:00Z, for ' + row.asim_field + '.';
         }
       }
       if (assigned.size > 16) return 'Kusto supports at most 16 mapped slots per parser.';
