@@ -3,7 +3,7 @@
 Status: current
 Audience: contributors, integrators, and reviewers of architectural changes
 Canonical for: pipeline boundaries, ownership, and design invariants
-Last verified: 2026-10-29
+Last verified: 2026-11-01
 
 LogLathe is a human-in-the-loop workbench for turning security-log evidence into
 reviewable normalization candidates. Its installed Python distribution and command
@@ -75,8 +75,8 @@ are applied explicitly by the evaluation harness and are recorded in the report.
 
 ## Assisted mapping review
 
-`mapping_review.py` consumes the existing verified annotation queue and registered
-mapping approaches. Each immutable task binds source evidence, catalogue,
+The `mapping_review/` package consumes the existing verified annotation queue and
+registered mapping approaches. Each immutable task binds source evidence, catalogue,
 prediction, and optional native reference output. Reference answers are joined
 after prediction and stay outside `MappingRequest`.
 
@@ -228,7 +228,7 @@ and must not be compared as though the tasks had identical granularity.
 | `semantic_annotation/` | Blinded queue creation, typed decisions, integrity, and promotion |
 | `catalog.py` | Commit-pinned Microsoft ASIM field catalogue |
 | `reviews.py` | Canonical and Potato cluster-decision readers |
-| `mapping_review.py` | Assisted mapping task preparation, draft validation, and adaptation to the existing compiler |
+| `mapping_review/` | Assisted mapping review: frozen task and draft contracts, editable rows, bundle preparation, and draft validation for the existing compiler |
 | `potato_bundle.py` | Shared source evidence and Potato task configurations/layouts |
 | `compiler.py` | Deterministic parser-specification and KQL candidate generation |
 | `benchmarking.py` | Evidence-separated corpus execution and reporting |
