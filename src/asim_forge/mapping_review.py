@@ -6,7 +6,6 @@ import hashlib
 import json
 import math
 import shutil
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal, cast, get_args
 
@@ -25,6 +24,7 @@ from .models import (
     StrictModel,
     TimeGeneratedMode,
     Transform,
+    is_datetime_constant,
     order_field_mappings,
 )
 from .reference.evidence import ReferenceReviewEvidence, reference_review_evidence
@@ -655,8 +655,11 @@ def _constant_value(row: MappingRow) -> str | int | float | bool:
         if row.constant_value.casefold() not in ("true", "false"):
             raise ReviewError("Boolean constants must be true or false")
         return row.constant_value.casefold() == "true"
-    if row.transform == "datetime":
-        datetime.fromisoformat(row.constant_value)
+    if row.transform == "datetime" and not is_datetime_constant(row.constant_value):
+        raise ReviewError(
+            "Datetime constants must be ISO dates or timestamps, such as 2026-03-01 or "
+            "2026-03-01T12:00:00Z"
+        )
     return row.constant_value
 
 

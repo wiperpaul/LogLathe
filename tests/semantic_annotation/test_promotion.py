@@ -221,8 +221,11 @@ def test_promotion_accepts_catalogue_compatible_scalar_constants(
         ("double", float("inf"), False),
         ("datetime", "2026-11-01T12:30:00Z", True),
         ("datetime", "2026-11-01", True),
+        ("datetime", "2026-11-01T12:30:00.1234567+05:30", True),
         ("datetime", "not-a-date", False),
         ("datetime", "2026-02-30T12:30:00Z", False),
+        ("datetime", "20261101", False),
+        ("datetime", "2026-11-01 12:30:00", False),
     ],
 )
 def test_promotion_validates_constant_values_before_writing_gold(

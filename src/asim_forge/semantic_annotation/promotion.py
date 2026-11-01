@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 from collections import Counter
 from collections.abc import Iterable
-from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -15,7 +14,7 @@ from ..evaluation import (
     write_semantic_mapping_cases,
 )
 from ..evaluation_splits import SemanticCaseGroup, write_semantic_case_groups
-from ..models import AsimCatalog, AsimCatalogField
+from ..models import AsimCatalog, AsimCatalogField, is_datetime_constant
 from .artifacts import (
     _sha256_file,
     _write_json,
@@ -272,11 +271,8 @@ def _validate_constant_value(
             type_matches = False
     else:
         type_matches = False
-    if kql_type == "datetime" and isinstance(value, str):
-        try:
-            datetime.fromisoformat(value)
-        except ValueError:
-            type_matches = False
+    if kql_type == "datetime" and isinstance(value, str) and not is_datetime_constant(value):
+        type_matches = False
     if not type_matches:
         raise SemanticAnnotationError(
             f"Decision {decision_id!r} uses a constant incompatible with "

@@ -806,6 +806,34 @@ def test_review_can_override_start_and_count_while_end_follows_normalized_start(
 
 
 @pytest.mark.parametrize(
+    ("value", "valid"),
+    [
+        ("2026-09-20", True),
+        ("2026-09-20T12:00:00Z", True),
+        ("20260920", False),
+        ("2026-09-20 12:00", False),
+        ("2026-09-31", False),
+    ],
+)
+def test_reviewer_datetime_constants_use_the_shared_grammar(default_task, value, valid):
+    task, catalog = default_task
+    draft = _draft(task, catalog)
+    draft.rows.extend(configured_mapping_defaults(task, catalog, "Authentication")[1:])
+    start = next(row for row in draft.rows if row.asim_field == "EventStartTime")
+    start.source_kind = "constant"
+    start.locator = ""
+    start.constant_value = value
+    if valid:
+        mappings = {
+            mapping.asim_field: mapping for mapping in validate_mapping_draft(draft, task, catalog)
+        }
+        assert mappings["EventStartTime"].constant_value == value
+    else:
+        with pytest.raises(ReviewError, match="ISO dates or timestamps"):
+            validate_mapping_draft(draft, task, catalog)
+
+
+@pytest.mark.parametrize(
     ("source", "message"),
     [
         ("EventEndTime", "own output"),
@@ -862,6 +890,10 @@ def test_output_mapping_rejects_text_span_evidence(default_task):
         (
             {"asim_field": "EventCount", "constant_value": "banana", "transform": "int"},
             "invalid constant",
+        ),
+        (
+            {"asim_field": "EventStartTime", "constant_value": "20260920", "transform": "datetime"},
+            "invalid constant: Datetime constants",
         ),
         (
             {
